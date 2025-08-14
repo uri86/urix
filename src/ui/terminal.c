@@ -153,7 +153,7 @@ void print_uint64(uint64_t value)
     }
 
     // print digits in correct order
-    for (size_t i = pos - 1; i >= 0; i--)
+    for (int i = pos - 1; i >= 0; i--)
     {
         terminal_putchar(buffer[i]);
     }
@@ -182,61 +182,58 @@ void print_hex(uint64_t value)
     }
 
     // print digits in correct order
-    for (size_t i = pos - 1; i >= 0; i--)
+    for (int i = pos - 1; i >= 0; i--)
     {
         terminal_putchar(buffer[i]);
     }
 }
 
 // convert integer to string in specified base
-char *itoa(size_t num, char *buffer, size_t base)
+char *itoa(int num, char *buffer, int base)
 {
-    size_t pos = 0;
-    size_t isNegative = 0;
-    char *result;
+    int pos = 0;
+    int isNegative = 0;
 
     // handle zero case
     if (num == 0)
     {
-        result[0] = '0';
-        result[1] = '\0';
-        return;
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return buffer;
     }
 
     // handle negative numbers (only for base 10)
     if (num < 0 && base == 10)
     {
         isNegative = 1;
-        num = -num;
+        num = -num; // Note: This can overflow for INT_MIN
     }
 
     // convert number to string in reverse order
     while (num > 0)
     {
-        size_t digit = num % base;
-
+        int digit = num % base;
         if (digit < 10)
-            result[pos++] = '0' + digit;
+            buffer[pos++] = '0' + digit;
         else
-            result[pos++] = 'A' + digit - 10;
-
+            buffer[pos++] = 'A' + digit - 10;
         num /= base;
     }
 
     // add negative sign if needed
     if (isNegative)
-        result[pos++] = '-';
+        buffer[pos++] = '-';
 
     // reverse the string to get correct order
-    for (size_t i = 0; i < pos / 2; i++)
+    for (int i = 0; i < pos / 2; i++)
     {
-        char temp = result[i];
-        result[i] = result[pos - 1 - i];
-        result[pos - 1 - i] = temp;
+        char temp = buffer[i];
+        buffer[i] = buffer[pos - 1 - i];
+        buffer[pos - 1 - i] = temp;
     }
 
     // null terminate
-    result[pos] = '\0';
-    buffer = result;
-    return result;
+    buffer[pos] = '\0';
+
+    return buffer;
 }

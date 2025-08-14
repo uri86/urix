@@ -99,6 +99,6 @@ void print_hex(uint64_t value);
 * takes a number, a character buffer (string) and a base (like 2, 10 and 16), and returns a string value of the number based on the base
 * it also puts the same number in the buffer it takes
 */
-char *itoa(size_t num, char *buffer, size_t base);
+char *itoa(int num, char *buffer, int base);
 
 #endif
