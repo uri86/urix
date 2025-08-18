@@ -1,9 +1,9 @@
 /*
- * terminal.h
- * Main printing header file for URIX
+ * vga.h
+ * VGA driver header file for URIX
  */
-#ifndef TERMINAL_H
-#define TERMINAL_H
+#ifndef VGA_H
+#define VGA_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -35,70 +35,51 @@ typedef enum
 } vga_color_t;
 
 /*
-* the function takes the foreground and background and puts them in the same byte for vga, using bitwise operations
+* the function takes the foreground and background and puts them in the same byte for console, using bitwise operations
 */
 uint8_t vga_entry_color(vga_color_t fg, vga_color_t bg);
 
 /*
-* takes a character and color in the vga format and returns a 16 bit vga entry so it can be displayed on the screen
+* takes a character and color in the console format and returns a 16 bit console entry so it can be displayed on the screen
 */
 uint16_t vga_entry(unsigned char uc, uint8_t color);
 
-/*
-* takes a string and returns its length in size_t (unsigned long)
-*/
-size_t strlen(const char *str);
 
 /*
 * removes all the characters from the screen, initializes the screen with spaces.
 */
-void terminal_initialize(void);
+void console_initialize(void);
 
 /*
-* takes a color made using the vga standard and updates the color of the screen.
+* takes a color made using the console standard and updates the color of the screen.
 */
-void terminal_setcolor(uint8_t color);
+void console_set_color(uint8_t color);
 
 /*
 * takes a character, color and placement (x and y coordinates) and puts it on the screen
 */
-void terminal_putentryat(char c, uint8_t color, size_t x, size_t y);
+void console_putentryat(char c, uint8_t color, size_t x, size_t y);
 
 /*
 * moves all the text on screen by one line and removes the text on the last line at the bottom
 */
-void terminal_scroll(void);
+void console_scroll(void);
 
 /*
 * adds one character to the screen, handles \n \t and \r
 * moves a line down if the line is too long (longer than the screen size)
 */
-void terminal_putchar(char c);
+void console_putchar(char c);
 
 /*
 * takes a string and its size and puts it on the string in the correct place
 */
-void terminal_write(const char *data, size_t size);
+void console_write(const char *data, size_t size);
 
 /*
 * takes a string, and prints onto the screen from where the string was last
 */
-void terminal_writestring(const char *data);
+void console_writestring(const char *data);
 
-/*
-* takes an unsigend 64 bit integer and prints it onto the screen correctly
-*/
-void print_uint64(uint64_t value);
-
-/*
-* takes an unsigned 64 bit integer and prints it onto the screen in hexadecimal (base 16)
-*/
-void print_hex(uint64_t value);
-
-/*
-* takes a number, a character buffer (string) and a base (like 2, 10 and 16), and returns a string value of the number based on the base
-* it also puts the same number in the buffer it takes
-*/
-char *itoa(int num, char *buffer, int base);
 
 #endif

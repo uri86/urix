@@ -2,7 +2,7 @@
 include rules.mk
 
 # Directories
-LIBS = src/ui  # Add more libs here like src/fs, src/net, etc.
+LIBS = src/lib src/drivers
 
 # Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
@@ -29,8 +29,8 @@ all: $(KERNEL)
 # Build each library using its own Makefile
 $(LIB_OBJS):
 	@for lib in $(LIBS); do \
-		$(MAKE) -C $$lib; \
-		cp $$lib/build/*.o $(BUILDDIR)/$$(basename $$lib).o; \
+		$(MAKE) -C $$lib CFLAGS="$(CFLAGS)"; \
+		cp $$lib/build/lib.o $(BUILDDIR)/$$(basename $$lib).o; \
 	done
 
 # Create build dir
@@ -57,7 +57,7 @@ iso: $(KERNEL)
 	i686-elf-grub-mkrescue -o $(ISO) $(ISODIR)
 
 run: iso
-	qemu-system-x86_64 -cdrom $(ISO) -m 512M
+	qemu-system-x86_64 -cdrom $(ISO) -m 512M -d int -no-reboot -no-shutdown
 
 debug: iso
 	qemu-system-x86_64 -cdrom $(ISO) -m 512M -s -S
