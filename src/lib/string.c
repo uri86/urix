@@ -24,7 +24,7 @@ char *itoa(uint64_t num, char *buffer, int base)
     }
 
     // handle negative numbers (only for base 10)
-    if (num < 0 && base == 10)
+    if (num < (uint64_t)0 && base == 10)
     {
         isNegative = 1;
         num = -num; // Note: This can overflow for INT_MIN
@@ -46,7 +46,7 @@ char *itoa(uint64_t num, char *buffer, int base)
         buffer[pos++] = '-';
 
     // reverse the string to get correct order
-    for (int i = 0; i < pos / 2; i++)
+    for (uint64_t i = 0; i < pos / 2; i++)
     {
         char temp = buffer[i];
         buffer[i] = buffer[pos - 1 - i];

@@ -63,7 +63,7 @@ void console_putentryat(char c, uint8_t color, size_t x, size_t y);
 /*
 * moves all the text on screen by one line and removes the text on the last line at the bottom
 */
-void console_scroll(void);
+void console_scroll_up(void);
 
 /*
 * adds one character to the screen, handles \n \t and \r
@@ -81,5 +81,14 @@ void console_write(const char *data, size_t size);
 */
 void console_writestring(const char *data);
 
+/*
+* clears the screen
+*/
+void console_clear(void);
+
+/*
+* another name for console write string, in order to preserve compatibility with linux.
+*/
+void console_puts(const char *str);
 
 #endif

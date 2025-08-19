@@ -56,7 +56,7 @@ void console_putentryat(char c, uint8_t color, size_t x, size_t y)
 }
 
 // scroll console up one line when bottom is reached
-void console_scroll(void)
+void console_scroll_up(void)
 {
     // move all lines up by copying each line to the previous line
     for (size_t y = 0; y < VGA_HEIGHT - 1; y++)
@@ -107,7 +107,7 @@ void console_putchar(char c)
     // scroll if bottom of screen reached
     if (console_row >= VGA_HEIGHT)
     {
-        console_scroll();
+        console_scroll_up();
         console_row = VGA_HEIGHT - 1;
     }
 }
@@ -123,5 +123,15 @@ void console_write(const char *data, size_t size)
 void console_writestring(const char *data)
 {
     console_write(data, strlen(data));
+}
+
+void console_clear(void)
+{
+    console_initialize();
+}
+
+void console_puts(const char *str)
+{
+    console_writestring(str);
 }
 
