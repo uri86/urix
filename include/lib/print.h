@@ -12,7 +12,7 @@
 * takes a string with formatting and prints it correctly
 * uses functions from terminal.c
 */
-void kprintf(char *str, ...);
+void kprintf(const char *fmt, ...);
 
 /*
 * wraps the function "screen_initialize" from terminal.c 

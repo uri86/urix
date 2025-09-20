@@ -6,59 +6,67 @@
 #include <drivers/vga.h>
 #include <lib/string.h>
 
-// console state variables
-static size_t console_row = 0;    // current row position
-static size_t console_column = 0; // current column position
-static uint8_t console_color = 0; // current color
+// state
+static size_t console_row = 0;
+static size_t console_column = 0;
+static uint8_t console_color = 0;
 static volatile uint16_t *console_buffer = (volatile uint16_t *)VGA_MEMORY;
 
-// helper function to combine foreground and background colors into one byte
+/**
+ * vga_entry_color - combine fg/bg colors into one byte
+ */
 uint8_t vga_entry_color(vga_color_t fg, vga_color_t bg)
 {
-    return fg | bg << 4; // lower 4 bits = foreground, upper 4 bits = background
+    return fg | (bg << 4);
 }
 
-// helper function to combine character and color into a 16-bit VGA entry
+/**
+ * vga_entry - combine char + color into VGA cell
+ */
 uint16_t vga_entry(unsigned char uc, uint8_t color)
 {
-    return (uint16_t)uc | (uint16_t)color << 8;
+    return (uint16_t)uc | ((uint16_t)color << 8);
 }
 
-// initialize console: clear screen
+/**
+ * console_initialize - clear screen and reset cursor
+ */
 void console_initialize(void)
 {
     console_row = 0;
     console_column = 0;
     console_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
 
-    // fill entire screen with spaces in the default color
     for (size_t y = 0; y < VGA_HEIGHT; y++)
     {
         for (size_t x = 0; x < VGA_WIDTH; x++)
         {
-            const size_t index = y * VGA_WIDTH + x;
-            console_buffer[index] = vga_entry(' ', console_color);
+            console_buffer[y * VGA_WIDTH + x] = vga_entry(' ', console_color);
         }
     }
 }
 
-// change current text color
+/**
+ * console_set_color - set current text color
+ */
 void console_set_color(uint8_t color)
 {
     console_color = color;
 }
 
-// put a single character 'c' at (x, y) with given color
+/**
+ * console_putentryat - put character at (x,y)
+ */
 void console_putentryat(char c, uint8_t color, size_t x, size_t y)
 {
-    const size_t index = y * VGA_WIDTH + x;
-    console_buffer[index] = vga_entry(c, color);
+    console_buffer[y * VGA_WIDTH + x] = vga_entry(c, color);
 }
 
-// scroll console up one line when bottom is reached
+/**
+ * console_scroll_up - scroll text up one row
+ */
 void console_scroll_up(void)
 {
-    // move all lines up by copying each line to the previous line
     for (size_t y = 0; y < VGA_HEIGHT - 1; y++)
     {
         for (size_t x = 0; x < VGA_WIDTH; x++)
@@ -67,15 +75,15 @@ void console_scroll_up(void)
         }
     }
 
-    // clear the last line to blank spaces
     for (size_t x = 0; x < VGA_WIDTH; x++)
     {
         console_buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = vga_entry(' ', console_color);
     }
 }
 
-// put a single character at the current cursor position
-// handles '\n', '\r', '\t', wrapping, and scrolling
+/**
+ * console_putchar - print char at cursor, handle special chars
+ */
 void console_putchar(char c)
 {
     if (c == '\n') // newline: move to start of next row
@@ -112,26 +120,35 @@ void console_putchar(char c)
     }
 }
 
-// write a buffer of characters to console
+/**
+ * console_write - write buffer of size N
+ */
 void console_write(const char *data, size_t size)
 {
     for (size_t i = 0; i < size; i++)
         console_putchar(data[i]);
 }
 
-// write null-terminated string to console
+/**
+ * console_writestring - write null-terminated string
+ */
 void console_writestring(const char *data)
 {
     console_write(data, strlen(data));
 }
 
+/**
+ * console_clear - clear screen
+ */
 void console_clear(void)
 {
     console_initialize();
 }
 
+/**
+ * console_puts - alias for writestring
+ */
 void console_puts(const char *str)
 {
     console_writestring(str);
 }
-

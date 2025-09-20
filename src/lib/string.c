@@ -1,60 +1,107 @@
-#include <stdint.h>
+/*
+ * string.c
+ * Minimal string & number conversion utilities
+ */
 
-// simple string length function (like strlen in stdlib)
-uint64_t strlen(const char *str)
+#include <stdint.h>
+#include <stddef.h>
+
+/**
+ * strlen - return length of null-terminated string
+ */
+size_t strlen(const char *str)
 {
-    uint64_t len = 0;
+    size_t len = 0;
     while (str[len])
         len++;
     return len;
 }
 
-// convert integer to string in specified base
-char *itoa(uint64_t num, char *buffer, int base)
+/**
+ * reverse - helper: reverse string in place
+ */
+static void reverse(char *str, size_t len)
 {
-    uint64_t pos = 0;
-    uint64_t isNegative = 0;
-
-    // handle zero case
-    if (num == 0)
+    for (size_t i = 0; i < len / 2; i++)
     {
-        buffer[0] = '0';
-        buffer[1] = '\0';
+        char tmp = str[i];
+        str[i] = str[len - 1 - i];
+        str[len - 1 - i] = tmp;
+    }
+}
+
+/**
+ * itoa - signed integer to string
+ */
+char *itoa(int64_t num, char *buffer, int base)
+{
+    if (base < 2 || base > 36)
+    {
+        buffer[0] = '\0';
         return buffer;
     }
 
-    // handle negative numbers (only for base 10)
-    if (base == 10)
+    size_t i = 0;
+    int isNegative = 0;
+
+    if (num == 0)
     {
-        isNegative = 1;
-        num = -num; // Note: This can overflow for INT_MIN
+        buffer[i++] = '0';
+        buffer[i] = '\0';
+        return buffer;
     }
 
-    // convert number to string in reverse order
+    if (num < 0 && base == 10)
+    {
+        isNegative = 1;
+        num = -num;
+    }
+
     while (num > 0)
     {
-        uint64_t digit = num % base;
-        if (digit < 10)
-            buffer[pos++] = '0' + digit;
-        else
-            buffer[pos++] = 'A' + digit - 10;
+        int digit = num % base;
+        buffer[i++] = (digit < 10) ? ('0' + digit) : ('A' + digit - 10);
         num /= base;
     }
 
-    // add negative sign if needed
     if (isNegative)
-        buffer[pos++] = '-';
+        buffer[i++] = '-';
 
-    // reverse the string to get correct order
-    for (uint64_t i = 0; i < pos / 2; i++)
+    buffer[i] = '\0';
+    reverse(buffer, i);
+
+    return buffer;
+}
+
+/**
+ * utoa - unsigned integer to string
+ */
+char *utoa(uint64_t num, char *buffer, int base)
+{
+    if (base < 2 || base > 36)
     {
-        char temp = buffer[i];
-        buffer[i] = buffer[pos - 1 - i];
-        buffer[pos - 1 - i] = temp;
+        buffer[0] = '\0';
+        return buffer;
     }
 
-    // null terminate
-    buffer[pos] = '\0';
+    size_t i = 0;
+
+    if (num == 0)
+    {
+        buffer[i++] = '0';
+        buffer[i] = '\0';
+        return buffer;
+    }
+
+    while (num > 0)
+    {
+        int digit = num % base;
+        buffer[i++] = (digit < 10) ? ('0' + digit) : ('A' + digit - 10);
+        num /= base;
+    }
+
+    buffer[i] = '\0';
+    reverse(buffer, i);
 
     return buffer;
 }
