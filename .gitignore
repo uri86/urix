@@ -6,3 +6,6 @@ iso
 
 # macOS
 .DS_Store
+
+# misc
+.vscode
