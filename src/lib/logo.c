@@ -17,4 +17,6 @@ void print_logo(void)
 
     for (size_t i = 0; i < lines; i++)
         kprintf("%s\n", urix_logo[i]);
+    
+    set_color(VGA_COLOR_GREEN, VGA_COLOR_BLACK);
 }
