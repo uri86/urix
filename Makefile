@@ -2,7 +2,7 @@
 include rules.mk
 
 # Directories
-LIBS = src/lib src/drivers
+LIBS = src/lib src/drivers src/memory
 
 # Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
