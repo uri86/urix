@@ -87,20 +87,75 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 for (char *p = tmp; *p && i < size - 1; p++)
                     buf[i++] = *p;
             }
-            else if (*fmt == 'l') // long/long long
+            else if (*fmt == 'l') // check for 'l' or 'll'
             {
-                fmt++;
-                if (*fmt == 'l' && *(fmt + 1) == 'u') // "llu"
+                if (*(fmt + 1) == 'l') // "ll" case
                 {
-                    fmt++; // consume second 'l'
-                    fmt++; // consume 'u'
+                    fmt += 2; // skip both 'l's
                     uint64_t value = va_arg(args, uint64_t);
                     char tmp[64];
-                    utoa(value, tmp, 10);
+
+                    if (*fmt == 'u') // %llu
+                    {
+                        utoa(value, tmp, 10);
+                    }
+                    else if (*fmt == 'x' || *fmt == 'X') // %llx / %llX
+                    {
+                        utoa(value, tmp, 16);
+                        buf[i++] = '0';
+                        buf[i++] = 'x';
+                    }
+                    else if (*fmt == 'd') // %lld (signed)
+                    {
+                        itoa((int64_t)value, tmp, 10);
+                    }
+                    else
+                    {
+                        // unknown specifier, print literally
+                        buf[i++] = '%';
+                        buf[i++] = 'l';
+                        buf[i++] = 'l';
+                        buf[i++] = *fmt;
+                        continue;
+                    }
+
+                    for (char *p = tmp; *p && i < size - 1; p++)
+                        buf[i++] = *p;
+                }
+                else
+                {
+                    // single 'l' (e.g., %ld, %lu, %lx)
+                    fmt++;
+                    unsigned long value = va_arg(args, unsigned long);
+                    char tmp[64];
+
+                    if (*fmt == 'u')
+                    {
+                        utoa(value, tmp, 10);
+                    }
+                    else if (*fmt == 'x' || *fmt == 'X')
+                    {
+                        utoa(value, tmp, 16);
+                        buf[i++] = '0';
+                        buf[i++] = 'x';
+                    }
+                    else if (*fmt == 'd')
+                    {
+                        itoa((long)value, tmp, 10);
+                    }
+                    else
+                    {
+                        buf[i++] = '%';
+                        buf[i++] = 'l';
+                        buf[i++] = *fmt;
+                        continue;
+                    }
+                    
                     for (char *p = tmp; *p && i < size - 1; p++)
                         buf[i++] = *p;
                 }
             }
+
             else // unknown specifier → print literally
             {
                 buf[i++] = '%';
