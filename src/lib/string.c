@@ -20,7 +20,7 @@ size_t strlen(const char *str)
 /**
  * reverse - helper: reverse string in place
  */
-static void reverse(char *str, size_t len)
+void reverse(char *str, size_t len)
 {
     for (size_t i = 0; i < len / 2; i++)
     {

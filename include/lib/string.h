@@ -16,7 +16,7 @@ uint64_t strlen(const char *str);
 /*
 * takes a string buffer and its length, reverses the string inside the buffer (in place).
 */
-static void reverse(char *str, size_t len);
+void reverse(char *str, size_t len);
 
 /*
  * takes a number, a character buffer (string) and a base (like 2, 10 and 16), and returns a string value of the number based on the base
