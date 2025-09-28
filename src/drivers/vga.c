@@ -1,7 +1,17 @@
 /*
- * vga.c
- * VGA driver file for URIX
+ * Licensed under MIT License - URIX project.
+ * vga.c - VGA text-mode driver implementation.
+ * Responsibilities:
+ *  - manage VGA text buffer at 0xB8000
+ *  - handle colors, and screen state
+ *  - provide character, string, and buffer output functions
+ *  - support special characters (\n, \r, \t) and scrolling
+ * Notes:
+ *  - operates in 80x25 text mode (VGA_WIDTH x VGA_HEIGHT)
+ *  - uses global console state (row, column, color, buffer)
+ *  - scrolling implemented by shifting lines up in buffer
  */
+
 
 #include <drivers/vga.h>
 #include <lib/string.h>

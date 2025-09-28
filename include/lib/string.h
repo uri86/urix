@@ -1,7 +1,14 @@
 /*
- * string.h
- * holds all the functions for a string in URIX.
+ * Licensed under MIT License - URIX project.
+ * string.h - String and number conversion helpers for URIX.
+ * Responsibilities:
+ *  - declare strlen, reverse, itoa, utoa
+ *  - provide lightweight replacement for libc string/stdio utilities
+ * Notes:
+ *  - focused on kernel use (no malloc, no locale support)
+ *  - supports integer bases 2–36
  */
+
 
 #ifndef STRING_H
 #define STRING_H

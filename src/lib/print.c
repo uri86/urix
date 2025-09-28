@@ -1,7 +1,16 @@
 /*
- * print.c
- * encapsulates the console.c file into prettier functions
+ * Licensed under MIT License - URIX project.
+ * print.c - Higher-level console printing utilities.
+ * Responsibilities:
+ *  - provide kprintf (printf-style formatted output)
+ *  - wrap low-level VGA/console calls
+ *  - support integers (signed/unsigned), hex, binary, strings
+ *  - manage text color and screen clearing
+ * Notes:
+ *  - implements kvsnprintf as a minimal formatting engine
+ *  - handles 32-bit, long, and long long specifiers
  */
+
 
 #include <stdarg.h>
 #include <stdint.h>

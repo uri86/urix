@@ -1,7 +1,15 @@
 /*
-* print.h
-* holds all the functions needed to print to the screen, using the vga driver.
-*/
+ * Licensed under MIT License - URIX project.
+ * print.h - Console printing interface for URIX.
+ * Responsibilities:
+ *  - declare printf-style output (kprintf)
+ *  - declare screen management (clear_screen, set_color)
+ *  - provide number formatting (print_uint64, print_hex)
+ * Notes:
+ *  - depends on vga.h for color and display control
+ *  - formatting core (kvsnprintf) defined in print.c
+ */
+
 #ifndef PRINT_H
 #define PRINT_H
 

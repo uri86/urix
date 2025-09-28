@@ -1,7 +1,14 @@
 /*
- * vga.h
- * VGA driver header file for URIX
+ * Licensed under MIT License - URIX project.
+ * vga.h - VGA text mode driver header.
+ * Responsibilities:
+ *  - define VGA dimensions, memory address, and colors
+ *  - declare functions for text mode operations (print, clear, scroll)
+ * Notes:
+ *  - provides enum vga_color_t for 16 VGA colors
+ *  - API designed for simplicity and compatibility with URIX console
  */
+
 #ifndef VGA_H
 #define VGA_H
 

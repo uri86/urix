@@ -1,7 +1,16 @@
 /*
- * string.c
- * Minimal string & number conversion utilities
+ * Licensed under MIT License - URIX project.
+ * string.c - minimal string and number conversion utilities.
+ * Responsibilities:
+ *  - provide strlen() implementation
+ *  - implement integer/string conversions (itoa, utoa)
+ *  - reverse strings in-place (helper for conversions)
+ * Notes:
+ *  - only implements minimal subset needed by kernel
+ *  - integer conversions support bases 2–36
+ *  - designed for use in printf-style functions
  */
+
 
 #include <stdint.h>
 #include <stddef.h>
