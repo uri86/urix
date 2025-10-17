@@ -41,6 +41,7 @@
 /* Memory map entry types */
 #define MULTIBOOT_MMAP_RESERVED 0
 #define MULTIBOOT_MMAP_AVAILABLE 1
+#define MULTIBOOT_MEMORY_RESERVED 2
 #define MULTIBOOT_MMAP_UMAI 3 // Useable Memory holding ACPI Information
 #define MULTIBOOT_MMAP_RMH 4  // Reserved Memory which needs to be preserved on Hibernation
 #define MULTIBOOT_MMAP_DRM 5  // Defective RAM modules
@@ -264,4 +265,4 @@ typedef struct multiboot_tag_ilbpa {
     uint32_t load_base_addr;
 } multiboot_tag_ilbpa;
 
-#endif
+#endif /* MULTIBOOT2_H */
