@@ -7,7 +7,7 @@ LD = x86_64-elf-ld
 # Directories
 SRCDIR = src
 BUILDDIR = build
-ISODIR = iso
+ISODIR = build/iso
 
 # Compute project root
 PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))

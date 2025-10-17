@@ -11,9 +11,10 @@
  *  - designed for use in printf-style functions
  */
 
-
 #include <stdint.h>
 #include <stddef.h>
+#include <lib/print.h>
+#include <memory/physical/pmm.h>
 
 /**
  * strlen - return length of null-terminated string
@@ -113,4 +114,25 @@ char *utoa(uint64_t num, char *buffer, int base)
     reverse(buffer, i);
 
     return buffer;
+}
+
+/*
+ * takes a destination pointer, value, and size to iterate on.
+ * enters the value given into the given count of bytes in memory, starting at the dest pointer given.
+ */
+void *memset(void *s, int c, size_t n)
+{
+    unsigned char *ptr = (unsigned char *)s;
+    unsigned char value = (unsigned char)c;
+    kprintf("memset(%llx, %x, %llu)\n", (uint64_t)s, c, n);
+
+    // Iterate through the memory block and set each byte
+    for (size_t i = 0; i < n; i++)
+    {
+        //kprintf("Setting: %x\n", (unsigned int)ptr[i]);
+
+        ptr[i] = value;
+    }
+
+    return s; // Return the original pointer to the memory block
 }

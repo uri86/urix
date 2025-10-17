@@ -31,9 +31,15 @@ void reverse(char *str, size_t len);
  */
 char *itoa(uint64_t num, char *buffer, int base);
 
-/**
+/*
  * takes an unsigned long long (64 bit number), a character buffer and a base, and returns a string value of the number based on the base give.
  */
 char *utoa(uint64_t num, char *buffer, int base);
+
+/*
+ * takes a destination pointer, value, and size to iterate on.
+ * enters the value given into the given count of bytes in memory, starting at the dest pointer given.
+ */
+ void *memset(void *dest, int value, uint64_t count);
 
 #endif

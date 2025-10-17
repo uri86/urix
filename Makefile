@@ -22,7 +22,7 @@ KERNEL = $(BUILDDIR)/kernel.bin
 # ISO
 ISO = urix.iso
 
-.PHONY: all clean iso run debug install-deps help $(LIBS)
+.PHONY: all clean iso run rerun $(LIBS)
 
 all: $(KERNEL)
 
@@ -47,7 +47,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 
 # Link kernel
 $(KERNEL): $(OBJECTS)
-	$(LD) -nostdlib -static -e _start -Ttext 0x100000 -o $@ $(OBJECTS)
+	$(LD) -nostdlib -static -T linker.ld -o $@ $(OBJECTS)
 
 # Create ISO
 iso: $(KERNEL)
@@ -57,10 +57,8 @@ iso: $(KERNEL)
 	i686-elf-grub-mkrescue -o $(ISO) $(ISODIR)
 
 run: iso
-	qemu-system-x86_64 -cdrom $(ISO) -m 512M -d int -no-reboot -no-shutdown
-
-debug: iso
-	qemu-system-x86_64 -cdrom $(ISO) -m 512M -s -S
+	qemu-system-x86_64 -cdrom $(ISO) -m size=2048M -d int -no-reboot -no-shutdown
+rerun: clean run
 
 clean:
 	rm -rf $(BUILDDIR) $(ISO) $(ISODIR)

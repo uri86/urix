@@ -1,50 +1,42 @@
 /*
- * kernel.c - URIX 64-bit kernel
- * Main kernel entry point and basic VGA text output
+ * kernel.c
+ *
+ * Responsibilities:
+ *  - Initialize the physical memory manager (pmm)
+ *
+ * Notes:
+ *  - GRUB passes the Multiboot2 info pointer as the first argument to
+ *    kernel_main (RDI) because boot.S calls `kernel_main(mb_info_ptr)`.
+ *  - boot.S creates identity mapping for low memory (first 1 GiB),
+ *    so we can read/write low memory here. See boot.S for details.
  */
-#include "./ui/print.h"
+
 #include <stdarg.h>
+#include <stdint.h>
+#include <stddef.h>
 
-// main kernel entry point, called from boot.S after entering 64-bit mode
-void kernel_main(void)
+#include <lib/print.h>
+#include <lib/logo.h> 
+#include <memory/physical/pmm.h>
+
+
+void kernel_main(uint64_t mb_info_addr)
 {
+    multiboot_size_tag *tag = (multiboot_size_tag *)(uintptr_t)(mb_info_addr);
     clear_screen();
-    print("Welcome to URIX 64-bit!\n");
-    print("Kernel successfully loaded in 64-bit mode.\n\n");
-    set_color(VGA_COLOR_BLACK, VGA_COLOR_WHITE);
-    terminal_writestring("Kernel successfully loaded in 64-bit mode.\n\n");
-    set_color(VGA_COLOR_LIGHT_BLUE, VGA_COLOR_BLACK);
-    print("System Information:\n");
-    print("- Architecture: x86_64\n");
-    print("- Kernel: URIX\n");
-    print("- VGA Text Mode: 80x25\n");
-    print("- VGA Buffer: %x\n", (uint64_t)VGA_MEMORY);
+    print_logo();
+    pmm_init(tag);
+    uint64_t frame = pmm_alloc_frame();
+    kprintf("Free frames: %llx\n", pmm_get_free_frames);
+    uint64_t frame2 = pmm_alloc_frame();
+    kprintf("Frames: 1: %llx 2: %llx total free: %llx\n", frame, frame2, pmm_get_free_frames());
+    pmm_free_frame(frame2);
+    kprintf("Free frames: %llx\n", pmm_get_free_frames);
+    pmm_free_frame(frame);
 
-    // show kernel stack address (prove 64-bit stack is active)
-    print("- Kernel Stack: ");
-    uint64_t stack_addr;
-    __asm__ volatile("mov %%rsp, %0" : "=r"(stack_addr)); // read 64-bit RSP
-    print("%d\n", stack_addr);
-
-    // show that 64-bit arithmetic works
-    print("- 64-bit test value: ");
-    print_uint64(0x1234567890ABCDEF);
-    terminal_putchar('\n');
-
-    // print final message and halt
-    set_color(VGA_COLOR_CYAN, VGA_COLOR_BLACK);
-    print("\nKernel is running. System halted.\n");
-
-    // infinite loop halts CPU to prevent running into invalid memory
+    /* Halt CPU: change this later to run more kernel code */
     for (;;)
     {
-        __asm__ volatile("hlt"); // halt instruction, reduces CPU usage
+        __asm__ volatile("hlt");
     }
-}
-
-void kprintf(char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    print(fmt, args);
 }

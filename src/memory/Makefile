@@ -1,27 +1,36 @@
-# Sub folder makefile for URIX kernel
 include ../../rules.mk
 
-# All C sources in this folder
+LIBS = physical
+
+LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
+
 SRC := $(wildcard *.c)
 
-# Object files in build dir
 OBJ := $(patsubst %.c, $(BUILDDIR)/%.o, $(SRC))
 
-# Final combined object
+ALL_OBJS := $(OBJ) $(LIB_OBJS)
+
 LIB_OBJ := $(BUILDDIR)/lib.o
 
 .PHONY: all clean
 
 all: $(LIB_OBJ)
 
-# Compile .c -> build/.o
+$(LIB_OBJS):
+	@for lib in $(LIBS); do \
+		$(MAKE) -C $$lib CFLAGS="$(CFLAGS)"; \
+		cp $$lib/build/lib.o $(BUILDDIR)/$$(basename $$lib).o; \
+	done
+
 $(BUILDDIR)/%.o: %.c
 	@mkdir -p $(BUILDDIR)/
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# Link all .o files into one .o file
-$(LIB_OBJ): $(OBJ)
-	$(LD) -r -o $@ $(OBJ)
+$(LIB_OBJ): $(ALL_OBJS)
+	$(LD) -r -o $@ $(ALL_OBJS)
 
 clean:
-	rm -rf $(BUILDDIR) $(LIB_OBJ) 
+	rm -rf $(BUILDDIR) $(LIB_OBJ)
+	@for lib in $(LIBS); do \
+		$(MAKE) -C $$lib clean; \
+	done
