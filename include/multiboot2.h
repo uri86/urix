@@ -16,27 +16,27 @@
 
 /* Multiboot2 tag types (using your acronyms) */
 #define MULTIBOOT_TAG_TYPE_END      0
-#define MULTI_BOOT_TAG_TYPE_BCL     1  // Boot Command Line
-#define MULTI_BOOT_TAG_TYPE_BLN     2  // Boot Loader Name
-#define MULTI_BOOT_TAG_TYPE_MODULES 3
+#define MULTIBOOT_TAG_TYPE_BCL     1  // Boot Command Line
+#define MULTIBOOT_TAG_TYPE_BLN     2  // Boot Loader Name
+#define MULTIBOOT_TAG_TYPE_MODULES 3
 #define MULTIBOOT_TAG_TYPE_BMI      4  // Basic Memory Information
 #define MULTIBOOT_TAG_TYPE_BBD      5  // BIOS Boot Device
 #define MULTIBOOT_TAG_TYPE_MMAP     6  // Memory Map
-#define MULTI_BOOT_TAG_TYPE_VI      7  // VBE Info
-#define MULTI_BOOT_TAG_TYPE_FBI     8  // Framebuffer Info
-#define MULTI_BOOT_TAG_TYPE_ES      9  // ELF Symbols
-#define MULTI_BOOT_TAG_TYPE_AT      10 // APM Table
-#define MULTI_BOOT_TAG_TYPE_E32STP  11 // EFI 32-bit System Table Pointer
-#define MULTI_BOOT_TAG_TYPE_E64STP  12 // EFI 64-bit System Table Pointer
-#define MULTI_BOOT_TAG_TYPE_ST      13 // SMBIOS Tables
-#define MULTI_BOOT_TAG_TYPE_AOR     14 // ACPI old RSDP
-#define MULTI_BOOT_TAG_TYPE_ANR     15 // ACPI new RSDP
-#define MULTI_BOOT_TAG_TYPE_NI      16 // Networking Information
-#define MULTI_BOOT_TAG_TYPE_EMMAP   17 // EFI memory map
-#define MULTI_BOOT_TAG_TYPE_EBSNT   18 // EFI Boot Services Not Terminated
-#define MULTI_BOOT_TAG_TYPE_E32IHP  19 // EFI 32-bit Image Handle Pointer
-#define MULTI_BOOT_TAG_TYPE_E64IHP  20 // EFI 64-bit Image Handle Pointer
-#define MULTI_BOOT_TAG_TYPE_ILBPA   21 // Image Load Base Physical Address
+#define MULTIBOOT_TAG_TYPE_VI      7  // VBE Info
+#define MULTIBOOT_TAG_TYPE_FBI     8  // Framebuffer Info
+#define MULTIBOOT_TAG_TYPE_ES      9  // ELF Symbols
+#define MULTIBOOT_TAG_TYPE_AT      10 // APM Table
+#define MULTIBOOT_TAG_TYPE_E32STP  11 // EFI 32-bit System Table Pointer
+#define MULTIBOOT_TAG_TYPE_E64STP  12 // EFI 64-bit System Table Pointer
+#define MULTIBOOT_TAG_TYPE_ST      13 // SMBIOS Tables
+#define MULTIBOOT_TAG_TYPE_AOR     14 // ACPI old RSDP
+#define MULTIBOOT_TAG_TYPE_ANR     15 // ACPI new RSDP
+#define MULTIBOOT_TAG_TYPE_NI      16 // Networking Information
+#define MULTIBOOT_TAG_TYPE_EMMAP   17 // EFI memory map
+#define MULTIBOOT_TAG_TYPE_EBSNT   18 // EFI Boot Services Not Terminated
+#define MULTIBOOT_TAG_TYPE_E32IHP  19 // EFI 32-bit Image Handle Pointer
+#define MULTIBOOT_TAG_TYPE_E64IHP  20 // EFI 64-bit Image Handle Pointer
+#define MULTIBOOT_TAG_TYPE_ILBPA   21 // Image Load Base Physical Address
 
 /* Memory map entry types */
 #define MULTIBOOT_MMAP_RESERVED 0
