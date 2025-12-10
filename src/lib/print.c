@@ -11,15 +11,26 @@
  *  - handles 32-bit, long, and long long specifiers
  */
 
-
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <lib/print.h>
 #include <lib/string.h>
-
+#include <lib/utils.h>
 // track whether a default color has been set
 static int color_initialized = 0;
+
+void debug_kprintf(const char *fmt, ...)
+{
+    if (!debug_mode)
+        return;
+
+    delay_ms(debug_delay_ms);
+    va_list args;
+    va_start(args, fmt);
+    kprintf(fmt, args);
+    va_end(args);
+}
 
 /**
  * kprintf - printf-style console output
@@ -41,6 +52,8 @@ void kprintf(const char *fmt, ...)
     va_end(args);
 
     console_writestring(buf);
+
+    delay_ms(debug_delay_ms);
 }
 
 /**
@@ -159,7 +172,7 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                         buf[i++] = *fmt;
                         continue;
                     }
-                    
+
                     for (char *p = tmp; *p && i < size - 1; p++)
                         buf[i++] = *p;
                 }
