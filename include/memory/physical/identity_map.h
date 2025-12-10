@@ -39,7 +39,7 @@ uint64_t pt_alloc_page_phys(void);
  *
  * Returns 0 on success, -1 on error.
  */
-int identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt_alloc_limit);
+uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt_alloc_limit);
 
 /* Print statistics of page-table allocator usage */
 void pt_alloc_print_usage(void);
