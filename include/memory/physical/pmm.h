@@ -36,11 +36,20 @@
 // We need 1 bit to track each 4KB page.
 // Size in bytes = (Max_Address / Page_Size) / 8
 // Size in bytes = (128 GiB / 4 KiB) / 8 = 4 MiB
-#define MAX_BITMAP_BYTES (MAX_PHYS_ADDR / PAGE_SIZE / 8) 
+#define MAX_BITMAP_BYTES (MAX_PHYS_ADDR / PAGE_SIZE / 8)
 
 // Reserve space for page tables that the kernel needs to set up *before* it can use the VMM.
 // 8 MiB is a safe, conservative size that should fit in the first memory region.
 #define PT_RESERVE_BYTES (8ULL * 1024 * 1024)
+
+// allows to preallocate the array in pmm.c
+#define MAX_MEM_REGIONS 128
+typedef struct mem_region
+{
+    uint64_t start;
+    uint64_t end;
+    uint32_t type; // part of the multiboot memory entry types.
+} mem_region;
 
 /* Initialize the physical memory manager */
 void pmm_init(multiboot_size_tag *s);

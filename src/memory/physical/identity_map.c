@@ -87,7 +87,7 @@ void pt_alloc_print_usage(void)
     uint64_t total = pt_alloc_limit - pt_alloc_start_saved;
     uint64_t percent = total > 0 ? (used * 100ULL) / total : 0;
 
-    kprintf("Page table usage: %llu / %llu bytes (%llu%%) = %llu KB\n",
+    kprintf("Page table usage: %llu / %llu bytes (%llu %) = %llu KB\n",
             (uint64_t)used,
             (uint64_t)total,
             (uint64_t)percent,

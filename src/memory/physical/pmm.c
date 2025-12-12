@@ -46,6 +46,10 @@ static uint64_t last_alloc_byte = 0;
 static uint64_t pt_reserve_start = 0;
 static uint64_t pt_reserve_end = 0;
 
+/* regions from multiboot2 header*/
+mem_region regions[MAX_MEM_REGIONS];
+uint32_t regions_count = 0;
+
 /* small helpers */
 static inline uint64_t align_up(uint64_t x, uint64_t a) { return (x + a - 1) & ~(a - 1); }
 static inline uint64_t align_down(uint64_t x, uint64_t a) { return x & ~(a - 1); }
@@ -206,8 +210,7 @@ static inline int ranges_overlap(uint64_t start1, uint64_t end1,
 }
 
 static uint64_t find_bitmap_region(
-    uint64_t region_start,
-    uint64_t region_end,
+    uint64_t search_limit_addr,
     uint64_t bitmap_bytes_needed,
     uint64_t kernel_start,
     uint64_t kernel_end,
@@ -216,49 +219,75 @@ static uint64_t find_bitmap_region(
     uint64_t multiboot_start,
     uint64_t multiboot_end)
 {
-    debug_kprintf("Searching for bitmap in region: [%llx - %llx]\n", region_start, region_end);
+    const uint64_t first_mg = 0x100000;
 
-    // Align start address up to page boundary
-    uint64_t aligned_start = (region_start + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-
-    // Try to find space in this region
-    for (uint64_t candidate = aligned_start;
-         candidate + bitmap_bytes_needed <= region_end;)
+    for (uint32_t i = 0; i < regions_count; i++)
     {
-        uint64_t candidate_end = candidate + bitmap_bytes_needed;
-        debug_kprintf("  Trying: [%llx - %llx]\n", candidate, candidate_end);
+        uint64_t region_start = regions[i].start;
+        uint64_t region_end = regions[i].end;
 
-        // Check if overlaps with kernel
-        if (ranges_overlap(candidate, candidate_end, kernel_start, kernel_end))
+        debug_kprintf("Searching for bitmap in region: [%llx - %llx]\n", region_start, region_end);
+
+        if (regions[i].type != MULTIBOOT_MMAP_AVAILABLE)
+            continue;
+
+        // Calculate the effective start and end for the search
+        uint64_t aligned_start = (region_start > first_mg) ? region_start : first_mg;
+        aligned_start = (aligned_start + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+        uint64_t region_search_end = (region_end < search_limit_addr) ? region_end : search_limit_addr;
+
+        // Skip if the region is too small after capping and alignment
+        if (aligned_start >= region_search_end || (aligned_start + bitmap_bytes_needed > region_search_end))
         {
-            debug_kprintf("  -> Overlaps with kernel, skipping\n");
-            candidate = ((kernel_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
+            debug_kprintf("  -> Region too small or capped by limit. Skipping.\n");
             continue;
         }
 
-        // Check if overlaps with page tables
-        if (ranges_overlap(candidate, candidate_end, pt_start, pt_end))
+        uint64_t candidate = aligned_start;
+
+        while (candidate + bitmap_bytes_needed <= region_search_end)
         {
-            debug_kprintf("  -> Overlaps with page tables, skipping\n");
-            candidate = ((pt_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
-            continue;
+            uint64_t candidate_end = candidate + bitmap_bytes_needed;
+
+            debug_kprintf("  Trying: [%llx - %llx]\n", candidate, candidate_end);
+
+            // Check if overlaps with kernel
+            if (ranges_overlap(candidate, candidate_end, kernel_start, kernel_end))
+            {
+                debug_kprintf("  -> Overlaps with kernel, jumping\n");
+                candidate = (kernel_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+                continue;
+            }
+
+            // Check if overlaps with page tables
+            if (ranges_overlap(candidate, candidate_end, pt_start, pt_end))
+            {
+                debug_kprintf("  -> Overlaps with page tables, jumping\n");
+                candidate = (pt_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+                continue;
+            }
+
+            // Check if overlaps with multiboot structures
+            if (ranges_overlap(candidate, candidate_end, multiboot_start, multiboot_end))
+            {
+                debug_kprintf("  -> Overlaps with multiboot, jumping\n");
+                candidate = (multiboot_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+                continue;
+            }
+
+            // Found a suitable region!
+            debug_kprintf("  -> FOUND suitable region at %llx\n", candidate);
+            return candidate;
+
+            // Advance to the next page for the next check (guaranteed advancement)
+            candidate += PAGE_SIZE;
         }
 
-        // Check if overlaps with multiboot structures
-        if (ranges_overlap(candidate, candidate_end, multiboot_start, multiboot_end))
-        {
-            debug_kprintf("  -> Overlaps with multiboot, skipping\n");
-            candidate = ((multiboot_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
-            continue;
-        }
-
-        // Found a suitable region!
-        debug_kprintf("  -> FOUND suitable region at %llx\n", candidate);
-        return candidate;
+        debug_kprintf("  -> No suitable space found in region [%llx - %llx]\n", region_start, region_end);
     }
 
-    // No suitable region found in this region
-    debug_kprintf("  -> No suitable space found in this region\n");
+    debug_kprintf("  -> No suitable space found in any available region\n");
     return 0;
 }
 
@@ -286,6 +315,9 @@ void pmm_init(multiboot_size_tag *s)
     highest_usable_addr = 0;
     uint64_t usable_bytes = 0;
 
+    // Reset global counter before scan
+    regions_count = 0;
+
     while (tag->type != MULTIBOOT_TAG_TYPE_END)
     {
         if (tag->type == MULTIBOOT_TAG_TYPE_MMAP)
@@ -294,12 +326,26 @@ void pmm_init(multiboot_size_tag *s)
             uint32_t entry_count = (mmap_tag->size - sizeof(*mmap_tag)) / mmap_tag->entry_size;
             kprintf("Memory map (%u entries):\n", entry_count);
 
+            // CORRECT: Use byte-level pointer arithmetic with entry_size
+            multiboot_mmap_entry *entry = mmap_tag->entries;
+
             for (uint32_t i = 0; i < entry_count; ++i)
             {
-                multiboot_mmap_entry *entry = &mmap_tag->entries[i];
-                kprintf("  [%llx - %llx] type=%u (%llu KB)\n",
-                        entry->addr, entry->addr + entry->len,
-                        entry->type, entry->len / 1024);
+                if (regions_count >= MAX_MEM_REGIONS)
+                {
+                    kprintf("WARNING: Reached MAX_MEM_REGIONS (%u), skipping remaining map entries.\n", MAX_MEM_REGIONS);
+                    break;
+                }
+
+                uint64_t region_start = entry->addr;
+                uint64_t region_end = entry->addr + entry->len;
+                uint32_t region_type = entry->type;
+                kprintf("  [%llx - %llx] type=%u (%llu KB)\n", region_start, region_end, region_type, entry->len / 1024);
+
+                regions[regions_count].start = region_start;
+                regions[regions_count].end = region_end;
+                regions[regions_count].type = region_type;
+                regions_count++;
 
                 if (entry->type == MULTIBOOT_MMAP_AVAILABLE)
                 {
@@ -314,6 +360,7 @@ void pmm_init(multiboot_size_tag *s)
                             highest_usable_addr = end;
                     }
                 }
+                entry = (multiboot_mmap_entry *)((uint8_t *)entry + mmap_tag->entry_size);
             }
         }
         tag = (multiboot_tag *)((uint8_t *)tag + ((tag->size + 7) & ~7));
@@ -387,10 +434,8 @@ void pmm_init(multiboot_size_tag *s)
     kprintf("CR3 switched successfully\n");
 
     /* Find bitmap region */
-    uint64_t bitmap_phys_start = find_bitmap_region(kernel_phys_start, kernel_phys_start + EARLY_MAP_LIMIT, bitmap_bytes_needed,
-                                                    kernel_phys_start, kernel_phys_end,
-                                                    pt_reserve_start, pt_reserve_end,
-                                                    multiboot_start, multiboot_end);
+    uint64_t bitmap_phys_start = find_bitmap_region(EARLY_MAP_LIMIT, bitmap_bytes_needed, kernel_phys_start, kernel_phys_end, pt_reserve_start, pt_reserve_end, multiboot_start, multiboot_end);
+
     if (!bitmap_phys_start)
     {
         kprintf("FATAL: Could not find suitable bitmap region\n");
@@ -429,25 +474,28 @@ void pmm_init(multiboot_size_tag *s)
     mark_region_used_internal(bitmap_phys_start, bitmap_phys_end);
 
     /* Mark non-available regions from memory map */
-    tag = (multiboot_tag *)((uint8_t *)s + 8);
-    while (tag->type != MULTIBOOT_TAG_TYPE_END)
+    debug_kprintf("Marking non-available regions using cached map...\n");
+    for (uint32_t i = 0; i < regions_count; ++i)
     {
-        if (tag->type == MULTIBOOT_TAG_TYPE_MMAP)
+        mem_region *region = &regions[i];
+
+        // Check if the type is NOT available
+        if (region->type != MULTIBOOT_MMAP_AVAILABLE)
         {
-            multiboot_tag_mmap *mm = (multiboot_tag_mmap *)tag;
-            uint32_t count = (mm->size - sizeof(*mm)) / mm->entry_size;
-            for (uint32_t i = 0; i < count; ++i)
+            // Align the region boundaries to page size
+            uint64_t start = align_down(region->start, PAGE_SIZE);
+            uint64_t end = align_up(region->end, PAGE_SIZE);
+
+            // Only mark the region if it's a valid, non-zero-length block
+            if (end > start)
             {
-                multiboot_mmap_entry *entry = &mm->entries[i];
-                if (entry->type != MULTIBOOT_MMAP_AVAILABLE)
-                {
-                    uint64_t start = align_down(entry->addr, PAGE_SIZE);
-                    uint64_t end = align_up(entry->addr + entry->len, PAGE_SIZE);
-                    mark_region_used_internal(start, end);
-                }
+                // Mark the pages as used in the PMM bitmap
+                mark_region_used_internal(start, end);
+
+                debug_kprintf("  Used: [%llx - %llx] (Type %u)\n",
+                              start, end, region->type);
             }
         }
-        tag = (multiboot_tag *)((uint8_t *)tag + ((tag->size + 7) & ~7));
     }
 
     kprintf("\n=== PMM Initialization Complete ===\n");
