@@ -2,14 +2,15 @@
 include rules.mk
 
 # Directories
-LIBS = src/lib src/drivers src/memory src/process src/interrupts
+# src/process
+LIBS = src/lib src/drivers src/memory src/interrupts src/cpu
 
 # Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
 
 # Source files
 ASM_SOURCES = $(SRCDIR)/boot.S
-C_SOURCES = $(SRCDIR)/kernel.c
+C_SOURCES   = $(SRCDIR)/kernel.c
 
 # Object files
 ASM_OBJECTS = $(ASM_SOURCES:$(SRCDIR)/%.S=$(BUILDDIR)/%.o)
@@ -22,18 +23,19 @@ KERNEL = $(BUILDDIR)/kernel.bin
 # ISO
 ISO = urix.iso
 
-.PHONY: all clean iso run rerun $(LIBS)
+.PHONY: all clean iso run run-qemu rerun rerun-y $(LIBS)
 
+# Default target
 all: $(KERNEL)
 
-# Build each library using its own Makefile
+# Build libraries
 $(LIB_OBJS):
 	@for lib in $(LIBS); do \
 		$(MAKE) -C $$lib CFLAGS="$(CFLAGS)"; \
 		cp $$lib/build/lib.o $(BUILDDIR)/$$(basename $$lib).o; \
 	done
 
-# Create build dir
+# Build directory
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
@@ -45,21 +47,42 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.S | $(BUILDDIR)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# Link kernel
 $(KERNEL): $(OBJECTS)
 	$(LD) -nostdlib -static -T linker.ld -o $@ $(OBJECTS)
 
-# Create ISO
 iso: $(KERNEL)
 	mkdir -p $(ISODIR)/boot/grub
 	cp $(KERNEL) $(ISODIR)/boot/kernel.bin
 	cp grub.cfg $(ISODIR)/boot/grub/grub.cfg
 	i686-elf-grub-mkrescue -o $(ISO) $(ISODIR)
 
-run: iso
-	qemu-system-x86_64 -cdrom $(ISO) -m size=2048M -d int -no-reboot -no-shutdown
+run-qemu:
+	qemu-system-x86_64 \
+		-cdrom $(ISO) \
+		-m size=4096M \
+		-d int \
+		-no-reboot \
+		-no-shutdown
 
-rerun: clean run
+run: iso
+	$(MAKE) run-qemu
+
+rerun:
+	@if [ "$(REBUILD)" = "1" ]; then \
+		$(MAKE) clean run; \
+	else \
+		printf "Recompile before running? [y/N]: "; \
+		read ans; \
+		if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
+			$(MAKE) clean run; \
+		else \
+			$(MAKE) run-qemu; \
+		fi; \
+	fi
+
+# Forced rebuild rerun
+rerun-y:
+	$(MAKE) rerun REBUILD=1
 
 clean:
 	rm -rf $(BUILDDIR) $(ISO) $(ISODIR)

@@ -14,6 +14,7 @@
 
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
+#include <memory/vmm.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -270,4 +271,11 @@ void exception_handler(struct interrupt_frame *frame)
     {
         __asm__ volatile("cli; hlt");
     }
+}
+
+void idt_update_for_higher_half(void) {
+    idtr.base = (uint64_t)phys_to_virt(virt_to_phys(&idt));
+    
+    // Reload the IDTR register
+    __asm__ volatile("lidt %0" : : "m"(idtr));
 }

@@ -98,4 +98,11 @@ void console_clear(void);
 */
 void console_puts(const char *str);
 
+/*
+ * console_update_address - Update the VGA buffer to its virtual address
+ * * After vmm_init(), the physical address 0xB8000 is no longer 
+ * identity-mapped once vmm_finish_init() runs. We must use the 
+ * higher-half direct map address instead.
+ */
+void console_update_address(void);
 #endif

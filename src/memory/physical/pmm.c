@@ -21,6 +21,7 @@
 #include <multiboot2.h>
 #include <memory/physical/pmm.h>
 #include <memory/physical/identity_map.h>
+#include <memory/vmm.h>
 #include <lib/print.h>
 #include <lib/string.h>
 #include <stddef.h>
@@ -398,8 +399,9 @@ void pmm_init(multiboot_size_tag *s)
             bitmap_bytes_needed / 1024, addr_space_frames, highest_usable_addr);
 
     /* Kernel bounds */
-    uint64_t kernel_phys_start = (uint64_t)&_kernel_start;
-    uint64_t kernel_phys_end = align_up((uint64_t)&_kernel_end, PAGE_SIZE);
+    uint64_t kernel_phys_start = (uint64_t)&_kernel_start - KERNEL_VIRT_BASE;
+    uint64_t kernel_phys_end = align_up((uint64_t)&_kernel_end - KERNEL_VIRT_BASE, PAGE_SIZE);
+
     kprintf("Kernel: [%llx - %llx] (%llu KB)\n",
             kernel_phys_start, kernel_phys_end,
             (kernel_phys_end - kernel_phys_start) / 1024);
@@ -421,11 +423,23 @@ void pmm_init(multiboot_size_tag *s)
     kprintf("\nBuilding identity map up to MAP_LIMIT (%llx = %llu MB)\n",
             EARLY_MAP_LIMIT, EARLY_MAP_LIMIT / (1024 * 1024));
 
-    uint64_t new_pml4 = identity_map_all(EARLY_MAP_LIMIT, pt_reserve_start, pt_reserve_end);
+    uint64_t new_pml4_phys = identity_map_all(EARLY_MAP_LIMIT, pt_reserve_start, pt_reserve_end);
+
+    uint64_t old_pml4_phys;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(old_pml4_phys));
+
+    uint64_t *old_pml4 = (uint64_t *)old_pml4_phys;
+    uint64_t *new_pml4 = (uint64_t *)new_pml4_phys;
+
     if (!new_pml4)
     {
         kprintf("FATAL: identity_map_all failed\n");
         return;
+    }
+
+    for (int i = 256; i < 512; i++)
+    {
+        new_pml4[i] = old_pml4[i];
     }
 
     kprintf("Identity map created, PML4 at %llx\n", new_pml4);
@@ -456,7 +470,8 @@ void pmm_init(multiboot_size_tag *s)
     /* Initialize bitmap */
     bitmap_size_bytes = bitmap_bytes_needed;
     bitmap_num_frames = addr_space_frames;
-    bitmap = (uint8_t *)(uintptr_t)bitmap_phys_start;
+    // Set bitmap pointer to Virtual Address
+    bitmap = (uint8_t *)(uintptr_t)(bitmap_phys_start + KERNEL_VIRT_BASE);
     bitmap_set = 1;
 
     kprintf("Zeroing bitmap (%llu KB)...\n", bitmap_size_bytes / 1024);
@@ -472,7 +487,8 @@ void pmm_init(multiboot_size_tag *s)
     mark_region_used_internal(multiboot_start, multiboot_end);
     mark_region_used_internal(pt_reserve_start, pt_reserve_end);
     mark_region_used_internal(bitmap_phys_start, bitmap_phys_end);
-
+    mark_region_used_internal(align_down(VGA_MEMORY, PAGE_SIZE), align_up(VGA_MEMORY + (VGA_WIDTH * VGA_HEIGHT * 2), PAGE_SIZE));
+    mark_region_used_internal(0x0, align_up(0x100000, PAGE_SIZE));
     /* Mark non-available regions from memory map */
     debug_kprintf("Marking non-available regions using cached map...\n");
     for (uint32_t i = 0; i < regions_count; ++i)

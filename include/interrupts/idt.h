@@ -80,4 +80,11 @@ void idt_init(void);
  */
 void idt_set_gate(uint8_t vector, uint64_t handler, uint16_t selector, uint8_t type_attr);
 
+/**
+ * Update the address stored inside the idtr pointer to reflect the virtual address.
+ * Must be called before vmm_finish_init since after it runs,
+ * the pointer is outdated and points to the physical memory.
+ */
+void idt_update_for_higher_half(void);
+
 #endif // IDT_H

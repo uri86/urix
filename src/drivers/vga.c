@@ -15,6 +15,7 @@
 
 #include <drivers/vga.h>
 #include <lib/string.h>
+#include <memory/vmm.h>
 
 // state
 static size_t console_row = 0;
@@ -161,4 +162,15 @@ void console_clear(void)
 void console_puts(const char *str)
 {
     console_writestring(str);
+}
+
+/*
+ * console_update_address - Update the VGA buffer to its virtual address
+ * * After vmm_init(), the physical address 0xB8000 is no longer 
+ * identity-mapped once vmm_finish_init() runs. We must use the 
+ * higher-half direct map address instead.
+ */
+void console_update_address(void) {
+    // KERNEL_VIRT_BASE + 0xB8000 = 0xFFFF8000000B8000
+    console_buffer = (volatile uint16_t *)phys_to_virt(VGA_MEMORY);
 }

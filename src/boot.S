@@ -11,6 +11,9 @@
 #    we write both low and high dwords to form correct 64-bit entries.
 #  - We enable PAE (CR4.PAE) before loading CR3; then set EFER.LME and CR0.PG.
 
+# This must match your linker.ld KERNEL_VIRT_BASE
+.set KERNEL_VIRT_BASE, 0xFFFFFFFF80000000
+
 .set MULTIBOOT2_MAGIC, 0xe85250d6
 .set GRUB_MULTIBOOT_ARCHITECTURE_I386, 0
 .set MULTIBOOT_HEADER_TAG_END, 0
@@ -48,7 +51,9 @@ multiboot_header_end:
 _start:
     # --- very early CPU setup (we're in 32-bit protected mode) ---
     cli                     # disable interrupts while booting
-    movl $stack_top, %esp   # set up a temporary 32-bit stack
+    
+    # Subtract Virtual Base to get physical stack address
+    movl $(stack_top - KERNEL_VIRT_BASE), %esp   
 
     # Clear EFLAGS (nice to have deterministic flags)
     pushl $0
@@ -59,8 +64,8 @@ _start:
     #   EBX = pointer to the multiboot2 info structure
     #
     # Save EBX into a global so our 64-bit kernel entry can read it later.
-    # We write only the low 32 bits here because the pointer is <4GiB.
-    movl %ebx, multiboot_info_ptr
+    # Use physical address of the pointer variable
+    movl %ebx, (multiboot_info_ptr - KERNEL_VIRT_BASE)
 
     # Basic CPU feature checks
     call check_cpuid
@@ -72,19 +77,18 @@ _start:
     jz no_long_mode
 
     # Build simple page tables that identity-map low memory.
-    # Note: setup_page_tables builds the page-table pages and fills entries.
     call setup_page_tables
 
-    # Enable paging and long mode (enable_paging performs the correct
-    # control-register/MSR sequence).
+    # Enable paging and long mode.
     call enable_paging
 
     # Load the 64-bit GDT (we prepared a 64-bit code segment descriptor)
-    lgdt gdt64_pointer
+    # Use physical address for GDT pointer
+    lgdt (gdt64_pointer_phys - KERNEL_VIRT_BASE)
 
-    # Jump to long mode by using a far jump into the 64-bit code segment.
-    # This will switch to 64-bit instruction decoding.
-    ljmpl $0x08, $long_mode_start
+    # Jump to physical address of 1: to enter 64-bit mode.
+    # We cannot jump to 'long_mode_start' directly because it's at a high virtual address.
+    ljmpl $0x08, $(1f - KERNEL_VIRT_BASE)
 
 # -------------------------
 # CPU feature helpers
@@ -142,49 +146,61 @@ no_long_mode_ret:
 #
 # This guarantees entries are well formed for the MMU when paging enables.
 setup_page_tables:
+    # Use physical addresses for all tables (Subtract KERNEL_VIRT_BASE)
     # edi/esi/edx used as temporaries to point at table buffers.
     # Zero each page table (4096 bytes each) using stosl (4-byte stores).
 
     # Zero PML4 (p4_table)
-    movl $p4_table, %edi
+    movl $(p4_table - KERNEL_VIRT_BASE), %edi
     xorl %eax, %eax
-    movl $1024, %ecx          # 1024 dwords = 4096 bytes
+    movl $1024, %ecx
     rep stosl
 
     # Zero PDPT (p3_table)
-    movl $p3_table, %edi
+    movl $(p3_table - KERNEL_VIRT_BASE), %edi
     xorl %eax, %eax
     movl $1024, %ecx
     rep stosl
 
     # Zero PD (p2_table)
-    movl $p2_table, %edi
+    movl $(p2_table - KERNEL_VIRT_BASE), %edi
     xorl %eax, %eax
     movl $1024, %ecx
     rep stosl
 
-    # --- Set PML4[0] to point to PDPT (p3_table) ---
-    # compute low dword: physical address of p3_table OR flags (present|writable)
-    movl $p3_table, %eax
-    orl $0x03, %eax           # Present (bit0) + Writable (bit1)
-    movl $p4_table, %edi      # place pointer at start of p4_table
-    movl %eax, (%edi)         # low 32 bits: base + flags
-    movl $0, 4(%edi)          # high 32 bits: zero (p3_table < 4 GiB)
+    # --- Set PML4[0] to point to PDPT (p3_table) --- Identity
+    movl $(p3_table - KERNEL_VIRT_BASE), %eax
+    orl $0x03, %eax           
+    movl $(p4_table - KERNEL_VIRT_BASE), %edi      
+    movl %eax, (%edi)         
+    movl $0, 4(%edi)          
 
-    # --- Set PDPT[0] to point to PD (p2_table) ---
-    movl $p2_table, %eax
-    orl $0x03, %eax           # Present + Writable
-    movl $p3_table, %edi      # PDPT base
-    movl %eax, (%edi)         # PDPT[0] low dword
-    movl $0, 4(%edi)          # PDPT[0] high dword = 0
+    # --- [FIX] Set PML4[511] to point to PDPT --- Higher Half
+    # Index 511 is the last entry in PML4, covering 0xFFFFFF8000000000+
+    # 511 * 8 bytes = 4088
+    movl %eax, 4088(%edi)
+    movl $0, 4092(%edi)
+
+    # --- Set PDPT[0] to point to PD (p2_table) --- Identity
+    movl $(p2_table - KERNEL_VIRT_BASE), %eax
+    orl $0x03, %eax           
+    movl $(p3_table - KERNEL_VIRT_BASE), %edi      
+    movl %eax, (%edi)         
+    movl $0, 4(%edi)          
+
+    # --- [FIX] Set PDPT[510] to point to PD --- Higher Half
+    # Index 510 covers the -2GB range (0xFFFFFFFF80000000)
+    # 510 * 8 bytes = 4080
+    movl %eax, 4080(%edi)
+    movl $0, 4084(%edi)
 
     # --- Fill PD entries with 2 MiB pages ---
     # Each PD entry (PDE) will have the physical base and flags:
     #  flags: Present(1) | Writable(2) | PageSize(PS=0x80 for 2MB) => 0x83
     # Start mapping at physical 0x0, then add 2MB for each entry.
-    movl $0x83, %eax          # initial low dword: flags + low base (0)
-    movl $p2_table, %edi
-    movl $512, %ecx           # 512 entries * 2 MiB = 1 GiB mapped
+        movl $0x83, %eax          
+    movl $(p2_table - KERNEL_VIRT_BASE), %edi
+    movl $512, %ecx           
 
 fill_p2_table:
     movl %eax, (%edi)         # low 32 bits of PDE (base_low | flags)
@@ -214,7 +230,7 @@ enable_paging:
     movl %eax, %cr4
 
     # Now load CR3 with the physical address of our PML4 table.
-    movl $p4_table, %eax
+    movl $(p4_table - KERNEL_VIRT_BASE), %eax
     movl %eax, %cr3
 
     # Enable long mode (LME) by setting bit 8 in EFER MSR.
@@ -234,11 +250,14 @@ enable_paging:
 # 64-bit entry point
 # -------------------------
 .code64
-long_mode_start:
-    # Now running 64-bit instruction decoding (we used a far jump).
-    # Registers are still usable; set up a clean 64-bit stack and segments.
+1:
+    # We are now in 64-bit mode (Physical RIP).
+    # Perform an absolute jump to the Higher Half.
+    movabsq $long_mode_start, %rax
+    jmp *%rax
 
-    # Set up flat data segments (the selectors map to our GDT entries)
+long_mode_start:
+    # Now running in Higher Half (0xFFFFFFFF8000xxxx).
     movw $0x10, %ax
     movw %ax, %ds
     movw %ax, %es
@@ -246,12 +265,12 @@ long_mode_start:
     movw %ax, %gs
     movw %ax, %ss
 
-    # Switch to our 64-bit stack
+    # Switch to our 64-bit stack (Virtual address)
     movq $stack_top, %rsp
 
-    # (Optional) clear the screen via VGA text buffer to show we are alive.
+    # Clear screen
     movq $0xb8000, %rdi
-    movw $0x0720, %ax          # space with light gray on black
+    movw $0x0720, %ax          
     movl $2000, %ecx
     rep stosw
 
@@ -266,13 +285,13 @@ halt_loop:
     jmp halt_loop
 
 # -------------------------
-# Error handlers (print a message on VGA then halt)
+# Error handlers
 # -------------------------
 no_cpuid:
 no_long_mode:
     movl $0xb8000, %edi
-    movl $error_msg, %esi
-    movb $0x4f, %ah            # red background, white text
+    movl $(error_msg - KERNEL_VIRT_BASE), %esi
+    movb $0x4f, %ah            
 print_error:
     lodsb
     testb %al, %al
@@ -293,6 +312,13 @@ gdt64:
     .quad 0x00cf92000000ffff    # data segment descriptor (unused in long mode)
 gdt64_end:
 
+# This pointer is used for the INITIAL lgdt while we are still "low"
+gdt64_pointer_phys:
+    .short gdt64_end - gdt64 - 1
+    .long (gdt64 - KERNEL_VIRT_BASE) # Force a 32-bit physical address
+    .long 0
+
+# This pointer can be used later by the C kernel
 gdt64_pointer:
     .short gdt64_end - gdt64 - 1
     .quad gdt64

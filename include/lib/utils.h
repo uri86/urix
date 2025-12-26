@@ -23,7 +23,7 @@
  *
  * Declared as 'extern' here; defined and initialized in utils.c.
  */
-extern short debug_mode;
+extern uint8_t debug_mode;
 
 /**
  * debug_delay_ms - Default delay duration for debug functions.

@@ -117,6 +117,24 @@ int strcmp(const char *s1, const char *s2);
 int strncmp(const char *s1, const char *s2, size_t n);
 
 /**
+ * strncpy - Copy a fixed number of characters from one string to another.
+ *
+ * dest: Destination buffer.
+ * src:  Source string.
+ * n:    Maximum number of bytes to copy.
+ *
+ * Returns:
+ *   Pointer to dest.
+ *   Returns NULL if dest or src is NULL.
+ *
+ * Notes:
+ *   - Does NOT guarantee null-termination if src length >= n.
+ *   - Pads with '\0' bytes if src is shorter than n.
+ *   - Caller must ensure dest has space for at least n bytes.
+ */
+char *strncpy(char *dest, const char *src, size_t n);
+
+/**
  * memset - Fill a block of memory with a byte value.
  *
  * dest: Pointer to destination memory.

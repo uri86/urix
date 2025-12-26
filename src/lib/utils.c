@@ -19,7 +19,7 @@
  * 0  -> Debug features are disabled (minimal overhead).
  * >0 -> Debug features (like delay_ms) are enabled.
  */
-short debug_mode = 0;
+uint8_t debug_mode = 0;
 
 /**
  * debug_delay_ms - Default delay duration for debug functions.
