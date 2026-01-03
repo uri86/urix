@@ -2,8 +2,7 @@
 include rules.mk
 
 # Directories
-# src/process
-LIBS = src/lib src/drivers src/memory src/interrupts src/cpu
+LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process
 
 # Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)

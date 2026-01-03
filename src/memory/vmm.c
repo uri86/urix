@@ -7,6 +7,7 @@
 #include <memory/physical/pmm.h>
 #include <lib/print.h>
 #include <lib/string.h>
+#include <lib/panic.h>
 
 /*
  * Global kernel address space
@@ -108,7 +109,7 @@ void vmm_init(void)
     if (!kernel_space.pml4_phys)
     {
         kprintf("FATAL: Failed to allocate kernel PML4\n");
-        return;
+        PANIC("Failed to allocate kernel PML4 - Out of Memory");
     }
 
     /* Access PML4 through identity mapping (still in low addresses) */
@@ -144,7 +145,7 @@ void vmm_init(void)
         if (vmm_map_page(&kernel_space, virt, phys, VMM_KERNEL_FLAGS) != 0)
         {
             kprintf("FATAL: Failed to map page at virt=%llx phys=%llx\n", virt, phys);
-            return;
+            PANIC("Failed to map higher-half kernel page");
         }
 
         pages_mapped++;

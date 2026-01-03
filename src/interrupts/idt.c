@@ -14,6 +14,7 @@
 
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
+#include <process/process.h>
 #include <memory/vmm.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -210,17 +211,14 @@ void irq_handler(struct interrupt_frame *frame)
     /* Calculate actual IRQ number (subtract 32 to get 0-15) */
     uint8_t irq = frame->int_no - 32;
 
+    /* Handle specific IRQs */
+    if (irq == 0) {
+        /* Timer tick - update scheduler */
+        process_timer_tick();
+    }
+    
     /* Send EOI to PIC */
     pic_send_eoi(irq);
-
-    /* Optional: handle specific IRQs */
-    if (irq == 0)
-    {
-        /* Timer tick - you can add code here later */
-        /* For now, do nothing to avoid spam */
-    }
-
-    /* Return normally (don't halt!) */
 }
 
 // Common exception handler called from assembly stubs

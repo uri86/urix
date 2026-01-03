@@ -9,48 +9,38 @@
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
 #include <cpu/gdt.h>
-
-extern char _kernel_start;
-extern char _kernel_end;
-
-static inline uint64_t align_up(uint64_t x, uint64_t a) { return (x + a - 1) & ~(a - 1); }
-
-static inline uint64_t read_cr3(void)
-{
-    uint64_t cr3;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
-    return cr3;
-}
+#include <tests/test.h>
+#include <process/process.h>
+#include <lib/panic.h>
 
 void enable_sse(void)
 {
     uint64_t cr0, cr4;
 
-    // Read CR0
     __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
-
-    // Clear EM (bit 2) - no x87 emulation
-    // Set MP (bit 1) - monitor coprocessor
-    cr0 &= ~(1ULL << 2); // Clear EM
-    cr0 |= (1ULL << 1);  // Set MP
-
-    // Write back CR0
+    cr0 &= ~(1ULL << 2);
+    cr0 |= (1ULL << 1);
     __asm__ volatile("mov %0, %%cr0" ::"r"(cr0));
 
-    // Read CR4
     __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
-
-    // Set OSFXSR (bit 9) - enable SSE
-    // Set OSXMMEXCPT (bit 10) - enable SSE exceptions
-    cr4 |= (1ULL << 9);  // OSFXSR
-    cr4 |= (1ULL << 10); // OSXMMEXCPT
-
-    // Write back CR4
+    cr4 |= (1ULL << 9);
+    cr4 |= (1ULL << 10);
     __asm__ volatile("mov %0, %%cr4" ::"r"(cr4));
+}
+
+static void test_suite_process(void)
+{
+    run_all_tests();
+    process_exit(0);
+
+    // Should never get here.
+    for (;;)
+        __asm__ volatile("hlt");
 }
 
 void kernel_main(uint64_t mb_info_addr)
 {
+    uint8_t test_mode = 0;
     uint8_t *cmd = NULL;
     multiboot_size_tag *tag = (multiboot_size_tag *)(uintptr_t)mb_info_addr;
     multiboot_tag *t = (multiboot_tag *)((uint8_t *)mb_info_addr + 8);
@@ -58,16 +48,16 @@ void kernel_main(uint64_t mb_info_addr)
     while (t->type != MULTIBOOT_TAG_TYPE_END)
     {
         if (t->type == MULTIBOOT_TAG_TYPE_BCL)
-        {
-            multiboot_tag_bcl *cmd_tag = (multiboot_tag_bcl *)t;
-            cmd = cmd_tag->string;
-        }
+            cmd = ((multiboot_tag_bcl *)t)->string;
+
         t = (multiboot_tag *)((uint8_t *)t + ((t->size + 7) & ~7));
     }
 
-    if (cmd && strcmp((char *)cmd, "debug") == 0)
+    if (cmd && strcmp((char *)cmd, "test") == 0)
     {
+        test_mode = 1;
         debug_mode = 1;
+        debug_delay_ms = 100;
     }
 
     clear_screen();
@@ -93,15 +83,11 @@ void kernel_main(uint64_t mb_info_addr)
     pic_unmask_irq(0);
 
     enable_sse();
-
-    /* Initialize PMM - this also creates identity mapping and switches CR3 */
-    debug_delay_ms = 150;
     debug_kprintf("Initializing PMM...\n");
     pmm_init(tag);
 
     debug_kprintf("Initializing VMM...\n");
     vmm_init();
-
     console_update_address();
 
     debug_kprintf("Reloading GDT/IDT to higher half...\n");
@@ -110,7 +96,24 @@ void kernel_main(uint64_t mb_info_addr)
     debug_kprintf("Finished reloading of GDT/IDT...\n");
     vmm_finish_init();
 
-    kprintf("Kernel is now fully virtual!\n");
-    for (;;)
-        __asm__ volatile("hlt");
+    process_init();
+
+    if (test_mode)
+    {
+        int pid = process_create(
+            (uint64_t)test_suite_process,
+            "test-suite",
+            PRIORITY_HIGH,
+            PROCESS_KERNEL);
+
+        if (pid < 0)
+            PANIC("Failed to create test-suite process");
+    }
+
+    pic_unmask_irq(0);
+    __asm__ volatile("sti");
+
+    process_schedule();
+
+    PANIC("Returned from scheduler in test mode");
 }

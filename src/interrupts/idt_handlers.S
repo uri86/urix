@@ -34,6 +34,16 @@ isr\num:
     jmp isr_common_stub
 .endm
 
+# Macro for IRQ handlers (these go to IRQ handler, not exception handler)
+.macro IRQ_HANDLER num
+.global isr\num
+.type isr\num, @function
+isr\num:
+    pushq $0                  # Push dummy error code
+    pushq $\num               # Push interrupt number
+    jmp irq_common_stub       # Jump to IRQ handler
+.endm
+
 # Define all 32 exception handlers
 ISR_NOERR 0     # Division By Zero
 ISR_NOERR 1     # Debug
@@ -68,25 +78,25 @@ ISR_NOERR 29    # Reserved
 ISR_NOERR 30    # Reserved
 ISR_NOERR 31    # Reserved
 
-# Define IRQ handlers (vectors 32-47)
-ISR_NOERR 32    # IRQ0 - Timer
-ISR_NOERR 33    # IRQ1 - Keyboard
-ISR_NOERR 34    # IRQ2 - Cascade
-ISR_NOERR 35    # IRQ3 - COM2
-ISR_NOERR 36    # IRQ4 - COM1
-ISR_NOERR 37    # IRQ5 - LPT2
-ISR_NOERR 38    # IRQ6 - Floppy
-ISR_NOERR 39    # IRQ7 - LPT1
-ISR_NOERR 40    # IRQ8 - RTC
-ISR_NOERR 41    # IRQ9 - Free
-ISR_NOERR 42    # IRQ10 - Free
-ISR_NOERR 43    # IRQ11 - Free
-ISR_NOERR 44    # IRQ12 - PS2 Mouse
-ISR_NOERR 45    # IRQ13 - FPU
-ISR_NOERR 46    # IRQ14 - Primary ATA
-ISR_NOERR 47    # IRQ15 - Secondary ATA
+# Define IRQ handlers (vectors 32-47) - these use IRQ_HANDLER macro
+IRQ_HANDLER 32    # IRQ0 - Timer
+IRQ_HANDLER 33    # IRQ1 - Keyboard
+IRQ_HANDLER 34    # IRQ2 - Cascade
+IRQ_HANDLER 35    # IRQ3 - COM2
+IRQ_HANDLER 36    # IRQ4 - COM1
+IRQ_HANDLER 37    # IRQ5 - LPT2
+IRQ_HANDLER 38    # IRQ6 - Floppy
+IRQ_HANDLER 39    # IRQ7 - LPT1
+IRQ_HANDLER 40    # IRQ8 - RTC
+IRQ_HANDLER 41    # IRQ9 - Free
+IRQ_HANDLER 42    # IRQ10 - Free
+IRQ_HANDLER 43    # IRQ11 - Free
+IRQ_HANDLER 44    # IRQ12 - PS2 Mouse
+IRQ_HANDLER 45    # IRQ13 - FPU
+IRQ_HANDLER 46    # IRQ14 - Primary ATA
+IRQ_HANDLER 47    # IRQ15 - Secondary ATA
 
-# Common stub that saves state and calls C handler
+# Common stub for exceptions - saves state and calls C handler
 isr_common_stub:
     # Save all general purpose registers
     pushq %rax
@@ -105,7 +115,7 @@ isr_common_stub:
     pushq %r14
     pushq %r15
 
-    # Call C handler with pointer to interrupt frame
+    # Call C exception handler with pointer to interrupt frame
     movq %rsp, %rdi           # First argument: pointer to stack frame
     call exception_handler
 
@@ -132,6 +142,7 @@ isr_common_stub:
     # Return from interrupt
     iretq
 
+# Common stub for IRQs - saves state and calls IRQ handler
 irq_common_stub:
     # Save all general purpose registers
     pushq %rax

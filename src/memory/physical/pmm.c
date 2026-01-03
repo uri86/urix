@@ -26,6 +26,7 @@
 #include <lib/string.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <lib/panic.h>
 
 /* linker-provided kernel boundaries */
 extern char _kernel_start;
@@ -297,7 +298,7 @@ void pmm_init(multiboot_size_tag *s)
     if (!s)
     {
         kprintf("pmm_init: FATAL - null multiboot pointer\n");
-        return;
+        PANIC("No valid multiboot header.");
     }
 
     kprintf("\n=== Initializing PMM ===\n");
@@ -370,7 +371,7 @@ void pmm_init(multiboot_size_tag *s)
     if (!mmap_tag)
     {
         kprintf("FATAL: No memory map found from multiboot\n");
-        return;
+        PANIC("No multiboot memory map was found.");
     }
 
     kprintf("\nTotal usable RAM: %llu MB (%llu frames)\n",
@@ -414,7 +415,7 @@ void pmm_init(multiboot_size_tag *s)
     {
         kprintf("FATAL: PT reserve [%llx - %llx] exceeds MAP_LIMIT %llx\n",
                 pt_reserve_start, pt_reserve_end, EARLY_MAP_LIMIT);
-        return;
+        PANIC("Not enough space for PT reserve.");
     }
     kprintf("PT reserve: [%llx - %llx] (%llu KB)\n",
             pt_reserve_start, pt_reserve_end, PT_RESERVE_BYTES / 1024);
@@ -434,7 +435,7 @@ void pmm_init(multiboot_size_tag *s)
     if (!new_pml4)
     {
         kprintf("FATAL: identity_map_all failed\n");
-        return;
+        PANIC("Identity mapping failed");
     }
 
     for (int i = 256; i < 512; i++)
@@ -453,7 +454,7 @@ void pmm_init(multiboot_size_tag *s)
     if (!bitmap_phys_start)
     {
         kprintf("FATAL: Could not find suitable bitmap region\n");
-        return;
+        PANIC("No suitable place for a bitmap was found.");
     }
 
     uint64_t bitmap_phys_end = bitmap_phys_start + bitmap_bytes_needed;
