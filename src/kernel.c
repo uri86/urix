@@ -28,6 +28,17 @@ void enable_sse(void)
     __asm__ volatile("mov %0, %%cr4" ::"r"(cr4));
 }
 
+void test_process(void)
+{
+    process_t *me = process_get_current();
+    for (int i = 0; i <= 50; i++)
+    {
+        kprintf("[%s] (PID: %u) at: %d\n", me->name, me->pid, i);
+        process_yield();
+    }
+    process_exit(0);
+}
+
 static void test_suite_process(void)
 {
     run_all_tests();
@@ -51,6 +62,12 @@ void kernel_main(uint64_t mb_info_addr)
             cmd = ((multiboot_tag_bcl *)t)->string;
 
         t = (multiboot_tag *)((uint8_t *)t + ((t->size + 7) & ~7));
+    }
+
+    if (cmd && strcmp((char *)cmd, "debug") == 0)
+    {
+        debug_mode = 1;
+        debug_delay_ms = 150;
     }
 
     if (cmd && strcmp((char *)cmd, "test") == 0)
@@ -110,6 +127,12 @@ void kernel_main(uint64_t mb_info_addr)
             PANIC("Failed to create test-suite process");
     }
 
+    process_create((uint64_t)test_process, "test1", PRIORITY_LOW, PROCESS_KERNEL);
+    process_create((uint64_t)test_process, "test2", PRIORITY_LOW, PROCESS_KERNEL);
+    process_create((uint64_t)test_process, "test3", PRIORITY_NORMAL, PROCESS_KERNEL);
+    process_create((uint64_t)test_process, "test4", PRIORITY_NORMAL, PROCESS_KERNEL);
+    process_create((uint64_t)test_process, "test5", PRIORITY_NORMAL, PROCESS_KERNEL);
+    process_create((uint64_t)test_process, "test6", PRIORITY_HIGH, PROCESS_KERNEL);
     pic_unmask_irq(0);
     __asm__ volatile("sti");
 

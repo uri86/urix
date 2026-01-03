@@ -255,7 +255,8 @@ char *strncpy(char *dest, const char *src, size_t n)
     size_t i = 0;
 
     /* Copy until end of src or n bytes */
-    for (; i < n && src[i]; i++)
+    /* n-1 ensures that at the end of the buffer we will have a \0 terminated string */
+    for (; i < n-1 && src[i]; i++)
         dest[i] = src[i];
 
     /* Zero-pad remainder */

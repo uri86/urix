@@ -12,12 +12,11 @@
 /* Dummy entry point */
 static void dummy_process(void)
 {
-    // process_exit(0);
-    for (;;)
+    for (int i = 0; i < 10; i++) // Just yield a few times
     {
         process_yield();
-        __asm__ volatile("hlt");
     }
+    process_exit(0); // Then exit cleanly
 }
 
 void process_tests(void)

@@ -32,6 +32,6 @@ void run_all_tests(void)
     pmm_tests();
     vmm_tests();
 
-    // process_tests();
+    process_tests();
     kprintf("\n===== ALL TESTS PASSED =====\n");
 }

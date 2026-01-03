@@ -190,7 +190,7 @@ int process_create(uint64_t entry_point, const char *name,
     total_processes++;
 
     debug_kprintf("Created process '%s' (PID %u, Pri %d, Ring %d)\n",
-            proc->name, proc->pid, proc->priority, proc->privilege);
+                  proc->name, proc->pid, proc->priority, proc->privilege);
 
     return proc->pid;
 }
@@ -203,7 +203,7 @@ void process_exit(int exit_code)
     }
 
     debug_kprintf("Process '%s' (PID %u) exiting with code %d\n",
-            current_process->name, current_process->pid, exit_code);
+                  current_process->name, current_process->pid, exit_code);
 
     /* Save what we need before cleanup */
     address_space_t *old_space = current_process->addr_space;
@@ -235,7 +235,7 @@ void process_exit(int exit_code)
     }
 
     debug_kprintf("Switching from exiting process to '%s' (PID %u)\n",
-            next->name, next->pid);
+                  next->name, next->pid);
 
     /* Update states */
     next->state = PROCESS_STATE_RUNNING;
@@ -299,7 +299,7 @@ void process_schedule(void)
     /* Continues if the same process was chosen again */
     if (new == old && old && old->state == PROCESS_STATE_RUNNING)
     {
-        enqueue(new);
+        // enqueue(new);
         return;
     }
 
@@ -356,26 +356,18 @@ int process_kill(uint32_t pid)
     if (pid == 0)
         return -1;
 
-    process_t *prev = NULL;
-    process_t *p = all_processes;
-
-    while (p && p->pid != pid)
-    {
-        prev = p;
-        p = p->next_all;
-    }
-
+    process_t *p = process_get(pid);
     if (!p)
-    {
-        /* PID not found */
         return -1;
-    }
 
-    /* Cannot kill currently running process */
+    /* Cannot kill currently running process - it must exit itself */
     if (p == current_process)
     {
         return -1;
     }
+
+    /* Disable interrupts while we manipulate process lists */
+    __asm__ volatile("cli");
 
     /* Remove from ready queue if present */
     ready_queue_t *q = &ready_queues[p->effective_priority];
@@ -403,12 +395,27 @@ int process_kill(uint32_t pid)
     }
 
     /* Remove from all_processes list */
-    if (prev)
-        prev->next_all = p->next_all;
-    else
-        all_processes = p->next_all;
+    process_t *prev = NULL;
+    process_t *ap = all_processes;
+
+    while (ap && ap != p)
+    {
+        prev = ap;
+        ap = ap->next_all;
+    }
+
+    if (ap)
+    {
+        if (prev)
+            prev->next_all = p->next_all;
+        else
+            all_processes = p->next_all;
+    }
 
     total_processes--;
+
+    /* Re-enable interrupts */
+    __asm__ volatile("sti");
 
     /* Cleanup resources */
     if (p->addr_space)

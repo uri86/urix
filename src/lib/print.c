@@ -25,11 +25,23 @@ void debug_kprintf(const char *fmt, ...)
     if (!debug_mode)
         return;
 
-    delay_ms(debug_delay_ms);
     va_list args;
     va_start(args, fmt);
-    kprintf(fmt, args);
+
+    if (!color_initialized)
+    {
+        set_color(VGA_COLOR_GREEN, VGA_COLOR_BLACK);
+        color_initialized = 1;
+    }
+
+    char buf[512];
+    kvsnprintf(buf, sizeof(buf), fmt, args);
+
     va_end(args);
+
+    delay_ms(debug_delay_ms);
+
+    console_writestring(buf);
 }
 
 /**
