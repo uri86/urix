@@ -7,7 +7,7 @@
 #include <process/process.h>
 #include <lib/string.h>
 
-#define PROCESS_TEST_COUNT 20
+#define PROCESS_TEST_COUNT 50
 
 /* Dummy entry point */
 static void dummy_process(void)

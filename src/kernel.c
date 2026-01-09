@@ -6,6 +6,7 @@
 #include <lib/string.h>
 #include <memory/physical/pmm.h>
 #include <memory/vmm.h>
+#include <memory/kmalloc.h>
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
 #include <cpu/gdt.h>
@@ -105,8 +106,8 @@ void kernel_main(uint64_t mb_info_addr)
 
     debug_kprintf("Initializing VMM...\n");
     vmm_init();
+    kmalloc_init();
     console_update_address();
-
     debug_kprintf("Reloading GDT/IDT to higher half...\n");
     gdt_update_for_higher_half();
     idt_update_for_higher_half();
@@ -126,13 +127,15 @@ void kernel_main(uint64_t mb_info_addr)
         if (pid < 0)
             PANIC("Failed to create test-suite process");
     }
-
-    process_create((uint64_t)test_process, "test1", PRIORITY_LOW, PROCESS_KERNEL);
-    process_create((uint64_t)test_process, "test2", PRIORITY_LOW, PROCESS_KERNEL);
-    process_create((uint64_t)test_process, "test3", PRIORITY_NORMAL, PROCESS_KERNEL);
-    process_create((uint64_t)test_process, "test4", PRIORITY_NORMAL, PROCESS_KERNEL);
-    process_create((uint64_t)test_process, "test5", PRIORITY_NORMAL, PROCESS_KERNEL);
-    process_create((uint64_t)test_process, "test6", PRIORITY_HIGH, PROCESS_KERNEL);
+    else
+    {
+        process_create((uint64_t)test_process, "test1", PRIORITY_LOW, PROCESS_KERNEL);
+        process_create((uint64_t)test_process, "test2", PRIORITY_LOW, PROCESS_KERNEL);
+        process_create((uint64_t)test_process, "test3", PRIORITY_NORMAL, PROCESS_KERNEL);
+        process_create((uint64_t)test_process, "test4", PRIORITY_NORMAL, PROCESS_KERNEL);
+        process_create((uint64_t)test_process, "test5", PRIORITY_NORMAL, PROCESS_KERNEL);
+        process_create((uint64_t)test_process, "test6", PRIORITY_HIGH, PROCESS_KERNEL);
+    }
     pic_unmask_irq(0);
     __asm__ volatile("sti");
 

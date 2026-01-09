@@ -1,10 +1,11 @@
 /*
  * Licensed under MIT License - URIX project.
- * process.c - Simplified process management
+ * process.c - Process Management implementation.
  */
 
 #include <process/process.h>
 #include <memory/vmm.h>
+#include <memory/kmalloc.h>
 #include <memory/physical/pmm.h>
 #include <lib/print.h>
 #include <lib/string.h>
@@ -109,12 +110,13 @@ int process_create(uint64_t entry_point, const char *name,
         return -1;
     }
 
-    /* Allocate PCB */
-    uint64_t pcb_frame = pmm_alloc_frame();
-    if (!pcb_frame)
+    process_t *proc = (process_t *)kmalloc(sizeof(process_t));
+    if (!proc)
+    {
+        debug_kprintf("Failed to allocate PCB for '%s'\n", name);
         return -1;
+    }
 
-    process_t *proc = (process_t *)phys_to_virt(pcb_frame);
     memset(proc, 0, sizeof(process_t));
 
     /* Setup identity */
@@ -130,7 +132,7 @@ int process_create(uint64_t entry_point, const char *name,
     proc->addr_space = vmm_create_address_space();
     if (!proc->addr_space)
     {
-        pmm_free_frame(pcb_frame);
+        kfree(proc);
         return -1;
     }
 
@@ -139,7 +141,7 @@ int process_create(uint64_t entry_point, const char *name,
     if (!proc->kernel_stack_phys)
     {
         vmm_destroy_address_space(proc->addr_space);
-        pmm_free_frame(pcb_frame);
+        kfree(proc);
         return -1;
     }
 
@@ -205,65 +207,11 @@ void process_exit(int exit_code)
     debug_kprintf("Process '%s' (PID %u) exiting with code %d\n",
                   current_process->name, current_process->pid, exit_code);
 
-    /* Save what we need before cleanup */
-    address_space_t *old_space = current_process->addr_space;
-    uint64_t old_stack = current_process->kernel_stack_phys;
-    uint64_t pcb_phys = virt_to_phys(current_process);
+    current_process->state = PROCESS_STATE_TERMINATED;
 
-    /* Remove from all processes list */
-    if (all_processes == current_process)
-    {
-        all_processes = current_process->next_all;
-    }
-    else
-    {
-        process_t *p = all_processes;
-        while (p && p->next_all != current_process)
-            p = p->next_all;
-        if (p)
-            p->next_all = current_process->next_all;
-    }
+    process_schedule();
 
-    total_processes--;
-
-    /* Get next process BEFORE we destroy anything */
-    process_t *next = dequeue_highest_priority();
-
-    if (!next)
-    {
-        PANIC("No process to switch to after exit!");
-    }
-
-    debug_kprintf("Switching from exiting process to '%s' (PID %u)\n",
-                  next->name, next->pid);
-
-    /* Update states */
-    next->state = PROCESS_STATE_RUNNING;
-    next->time_slice_remaining = TIME_SLICE;
-    next->wait_time = 0;
-    next->effective_priority = next->priority;
-
-    current_process = next;
-    context_switches++;
-
-    /* Switch address space BEFORE cleanup */
-    vmm_switch_address_space(next->addr_space);
-
-    /* Now safe to cleanup old process */
-    if (old_space)
-    {
-        vmm_destroy_address_space(old_space);
-    }
-    if (old_stack)
-    {
-        pmm_free_frame(old_stack);
-    }
-    pmm_free_frame(pcb_phys);
-
-    /* Jump to new process */
-    process_context_switch(NULL, &next->context);
-
-    PANIC("Returned from context switch in exit");
+    PANIC("Returned from schedule in process_exit");
 }
 
 void process_yield(void)
@@ -282,6 +230,59 @@ void process_yield(void)
 void process_schedule(void)
 {
     process_t *old = current_process;
+
+    if (old && old->state == PROCESS_STATE_TERMINATED)
+    {
+        debug_kprintf("Cleaning up terminated process '%s' (PID %u)\n",
+                      old->name, old->pid);
+
+        if (all_processes == old)
+        {
+            all_processes = old->next_all;
+        }
+        else
+        {
+            process_t *p = all_processes;
+            while (p && p->next_all != old)
+                p = p->next_all;
+            if (p)
+                p->next_all = old->next_all;
+        }
+
+        total_processes--;
+
+        address_space_t *old_space = old->addr_space;
+        uint64_t old_stack = old->kernel_stack_phys;
+        process_t *old_proc = old;
+
+        process_t *new = dequeue_highest_priority();
+        if (!new)
+        {
+            PANIC("No runnable process after termination!");
+        }
+
+        new->state = PROCESS_STATE_RUNNING;
+        new->time_slice_remaining = TIME_SLICE;
+        new->wait_time = 0;
+        new->effective_priority = new->priority;
+
+        current_process = new;
+        context_switches++;
+
+        vmm_switch_address_space(new->addr_space);
+
+        if (old_space)
+            vmm_destroy_address_space(old_space);
+        if (old_stack)
+            pmm_free_frame(old_stack);
+
+        kfree(old_proc);
+
+        process_context_switch(NULL, &new->context);
+
+        PANIC("Returned from context switch after cleanup");
+    }
+
     process_t *new = dequeue_highest_priority();
 
     if (!new)
@@ -424,8 +425,7 @@ int process_kill(uint32_t pid)
     if (p->kernel_stack_phys)
         pmm_free_frame(p->kernel_stack_phys);
 
-    uint64_t pcb_phys = virt_to_phys(p);
-    pmm_free_frame(pcb_phys);
+    kfree(p);
 
     return 0;
 }
