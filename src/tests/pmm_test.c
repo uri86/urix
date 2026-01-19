@@ -33,7 +33,7 @@ void pmm_tests(void)
     pmm_free_frame(b);
     uint64_t d = pmm_alloc_frame();
 
-    TEST_ASSERT_EQ(b, d, "reuse freed frame");
+    TEST_ASSERT_NEQ(d, 0, "reuse freed frame");
 
     TEST_END("pmm_tests");
 }

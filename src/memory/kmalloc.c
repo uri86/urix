@@ -45,6 +45,7 @@ typedef struct slab_class
 
 static slab_class_t slab_classes[KMALLOC_CLASS_COUNT];
 static inline size_t align_up(size_t x, size_t a) { return (x + a - 1) & ~(a - 1); }
+
 static int size_to_class(size_t size)
 {
     for (int i = 0; i < KMALLOC_CLASS_COUNT; i++)
@@ -55,7 +56,6 @@ static int size_to_class(size_t size)
 
 static void *alloc_pages(size_t pages)
 {
-    // uint64_t first_phys = 0;
     uint64_t first_virt = 0;
 
     for (size_t i = 0; i < pages; i++)
@@ -69,14 +69,12 @@ static void *alloc_pages(size_t pages)
         vmm_map_page(NULL, virt, phys, VMM_KERNEL_FLAGS);
 
         if (i == 0)
-        {
-            // first_phys = phys;
             first_virt = virt;
-        }
     }
 
     kmalloc_header_t *hdr = (kmalloc_header_t *)first_virt;
     hdr->flags = KMALLOC_FLAG_PAGE;
+    hdr->class = 0;
     hdr->pages = pages;
 
     return (void *)(first_virt + sizeof(kmalloc_header_t));
@@ -145,25 +143,26 @@ void *kmalloc(size_t size)
     if (size == 0)
         return NULL;
 
-    size_t total = size + sizeof(kmalloc_header_t);
-
-    int class = size_to_class(total);
-    if (class < 0)
+    /* For small allocations, use slabs directly without header overhead */
+    int class = size_to_class(size);
+    if (class >= 0)
     {
-        size_t pages = align_up(total, PAGE_SIZE) / PAGE_SIZE;
-        return alloc_pages(pages);
+        slab_class_t *sc = &slab_classes[class];
+
+        if (!sc->free_list)
+            slab_refill(class);
+
+        free_block_t *blk = sc->free_list;
+        sc->free_list = blk->next;
+        sc->used_blocks++;
+
+        return (void *)blk;
     }
 
-    slab_class_t *sc = &slab_classes[class];
-
-    if (!sc->free_list)
-        slab_refill(class);
-
-    free_block_t *blk = sc->free_list;
-    sc->free_list = blk->next;
-    sc->used_blocks++;
-
-    return (void *)blk;
+    /* Large allocation - use pages */
+    size_t total = size + sizeof(kmalloc_header_t);
+    size_t pages = align_up(total, PAGE_SIZE) / PAGE_SIZE;
+    return alloc_pages(pages);
 }
 
 void kfree(void *ptr)
@@ -171,14 +170,20 @@ void kfree(void *ptr)
     if (!ptr)
         return;
 
-    /* Find the page base address to locate the header */
-    uint64_t page_base = ((uint64_t)ptr) & ~(PAGE_SIZE - 1);
+    /* Round DOWN to page base to find header */
+    uint64_t page_base = ((uint64_t)ptr) & ~((uint64_t)PAGE_SIZE - 1);
     kmalloc_header_t *hdr = (kmalloc_header_t *)page_base;
 
-    /* Check if this looks like a valid header */
+    /* Validate header is at page boundary */
+    if (((uint64_t)hdr & (PAGE_SIZE - 1)) != 0)
+    {
+        PANIC("kfree: header not at page boundary");
+    }
+
+    /* Check flags */
     if (hdr->flags == 0 || (hdr->flags & ~(KMALLOC_FLAG_SLAB | KMALLOC_FLAG_PAGE)))
     {
-        PANIC("kfree: invalid pointer or corrupted header");
+        PANIC("kfree: invalid flags in header");
     }
 
     if (hdr->flags & KMALLOC_FLAG_SLAB)
