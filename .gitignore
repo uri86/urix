@@ -9,5 +9,6 @@ iso
 
 # misc
 .vscode
+*img
 # idea folder for jetbrains IDEs.
 .idea

@@ -33,6 +33,28 @@ size_t strlen(const char *str)
 }
 
 /**
+ * strcpy - Copy a null-terminated string to a buffer.
+ *
+ * dest: Destination buffer.
+ * src:  Source string.
+ *
+ * Returns:
+ * Pointer to dest.
+ * If either dest or src is NULL, returns NULL.
+ */
+char *strcpy(char *dest, const char *src)
+{
+    if (!dest || !src)
+        return NULL;
+
+    char *ret = dest;
+    while ((*dest++ = *src++))
+        ;
+
+    return ret;
+}
+
+/**
  * reverse - Reverse a string in place.
  *
  * str: Pointer to the string buffer.
@@ -256,7 +278,7 @@ char *strncpy(char *dest, const char *src, size_t n)
 
     /* Copy until end of src or n bytes */
     /* n-1 ensures that at the end of the buffer we will have a \0 terminated string */
-    for (; i < n-1 && src[i]; i++)
+    for (; i < n - 1 && src[i]; i++)
         dest[i] = src[i];
 
     /* Zero-pad remainder */
@@ -265,7 +287,6 @@ char *strncpy(char *dest, const char *src, size_t n)
 
     return dest;
 }
-
 
 /**
  * memset - Fill a block of memory with a byte value.
@@ -319,4 +340,84 @@ void *memset(void *s, int c, size_t n)
         *ptr++ = value;
 
     return s;
+}
+
+/**
+ * memcpy - Copy memory area.
+ *
+ * dest: Pointer to the destination memory area.
+ * src:  Pointer to the source memory area.
+ * n:    Number of bytes to copy.
+ *
+ * Returns a pointer to dest.
+ */
+void *memcpy(void *dest, const void *src, size_t n)
+{
+    uint8_t *d = (uint8_t *)dest;
+    const uint8_t *s = (const uint8_t *)src;
+
+    while (n--)
+    {
+        *d++ = *s++;
+    }
+    return dest;
+}
+
+/**
+ * memmove - Copy memory area.
+ *
+ * dest: Pointer to the destination memory area.
+ * src:  Pointer to the source memory area.
+ * n:    Number of bytes to copy.
+ *
+ * Returns a pointer to dest.
+ */
+void *memmove(void *dest, const void *src, size_t n)
+{
+    uint8_t *d = (uint8_t *)dest;
+    const uint8_t *s = (const uint8_t *)src;
+
+    if (d < s)
+    {
+        // Copy forward
+        while (n--)
+        {
+            *d++ = *s++;
+        }
+    }
+    else
+    {
+        // Copy backward
+        d += n;
+        s += n;
+        while (n--)
+        {
+            *--d = *--s;
+        }
+    }
+    return dest;
+}
+
+char *strcat(char *dest, const char *src)
+{
+    char *ptr = dest;
+
+    // Move ptr to the end of the destination string
+    while (*ptr != '\0')
+    {
+        ptr++;
+    }
+
+    // Copy source string to the end of destination
+    while (*src != '\0')
+    {
+        *ptr = *src;
+        ptr++;
+        src++;
+    }
+
+    // Null-terminate the result
+    *ptr = '\0';
+
+    return dest;
 }

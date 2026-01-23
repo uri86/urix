@@ -25,6 +25,18 @@
 uint64_t strlen(const char *str);
 
 /**
+ * strcpy - Copy a null-terminated string to a buffer.
+ *
+ * dest: Destination buffer.
+ * src:  Source string.
+ *
+ * Returns:
+ * Pointer to dest.
+ * If either dest or src is NULL, returns NULL.
+ */
+char *strcpy(char *dest, const char *src);
+
+/**
  * reverse - Reverse a string in place.
  *
  * str: Pointer to the string buffer.
@@ -145,5 +157,44 @@ char *strncpy(char *dest, const char *src, size_t n);
  * Returns dest.
  */
 void *memset(void *dest, int value, uint64_t count);
+
+/**
+ * memcpy - Copy memory area.
+ *
+ * dest: Pointer to the destination memory area.
+ * src:  Pointer to the source memory area.
+ * n:    Number of bytes to copy.
+ *
+ * Returns a pointer to dest.
+ * Note: Does NOT handle overlapping memory.
+ */
+void *memcpy(void *dest, const void *src, size_t n);
+
+/**
+ * memmove - Copy memory area.
+ *
+ * dest: Pointer to the destination memory area.
+ * src:  Pointer to the source memory area.
+ * n:    Number of bytes to copy.
+ *
+ * Returns a pointer to dest.
+ * safely handles cases where src and dest overlap.
+ */
+void *memmove(void *dest, const void *src, size_t n);
+
+/**
+ * strcat - Concatenate two null-terminated strings.
+ *
+ * dest: Pointer to the destination buffer.
+ * src:  Pointer to the source string to append.
+ *
+ * Appends the string pointed to by src to the end of the string
+ * pointed to by dest. The resulting string in dest is always
+ * null-terminated.
+ *
+ * Returns a pointer to dest.
+ */
+
+char *strcat(char *dest, const char *src);
 
 #endif
