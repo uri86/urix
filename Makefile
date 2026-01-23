@@ -2,7 +2,7 @@
 include rules.mk
 
 # Directories
-LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process
+LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process src/fs
 
 # Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
@@ -57,11 +57,12 @@ iso: $(KERNEL)
 
 run-qemu:
 	qemu-system-x86_64 \
-		-cdrom $(ISO) \
 		-m size=4096M \
 		-d int \
 		-no-reboot \
-		-no-shutdown
+		-no-shutdown \
+		-drive file=disk.img,format=raw,if=ide,index=0 \
+		-cdrom $(ISO)
 
 run: iso
 	$(MAKE) run-qemu

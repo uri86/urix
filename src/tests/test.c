@@ -20,6 +20,7 @@ void string_tests(void);
 void pmm_tests(void);
 void vmm_tests(void);
 void process_tests(void);
+void vfs_tests(void);
 
 void run_all_tests(void)
 {
@@ -31,7 +32,7 @@ void run_all_tests(void)
     /* Memory management tests */
     pmm_tests();
     vmm_tests();
-
+    vfs_tests();
     process_tests();
     kprintf("\n===== ALL TESTS PASSED =====\n");
 }
