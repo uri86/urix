@@ -15,6 +15,7 @@
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
 #include <process/process.h>
+#include <drivers/keyboard.h>
 #include <memory/vmm.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -212,11 +213,17 @@ void irq_handler(struct interrupt_frame *frame)
     uint8_t irq = frame->int_no - 32;
 
     /* Handle specific IRQs */
-    if (irq == 0) {
+    if (irq == 0)
+    {
         /* Timer tick - update scheduler */
         process_timer_tick();
     }
-    
+    else if (irq == 1)
+    {
+        /* Keyboard interrupt */
+        keyboard_interrupt_handler();
+    }
+
     /* Send EOI to PIC */
     pic_send_eoi(irq);
 }
@@ -271,9 +278,10 @@ void exception_handler(struct interrupt_frame *frame)
     }
 }
 
-void idt_update_for_higher_half(void) {
+void idt_update_for_higher_half(void)
+{
     idtr.base = (uint64_t)phys_to_virt(virt_to_phys(&idt));
-    
+
     // Reload the IDTR register
     __asm__ volatile("lidt %0" : : "m"(idtr));
 }

@@ -19,6 +19,7 @@
 #include <fs/vfs_manager.h>
 #include <drivers/ata.h>
 #include <drivers/ramdisk.h>
+#include <drivers/keyboard.h>
 
 void enable_sse(void)
 {
@@ -34,23 +35,80 @@ void enable_sse(void)
     __asm__ volatile("mov %0, %%cr4" ::"r"(cr4));
 }
 
-void test_process(void)
-{
-    process_t *me = process_get_current();
-    for (int i = 0; i <= 50; i++)
-    {
-        kprintf("[%s] (PID: %u) at: %d\n", me->name, me->pid, i);
-        process_yield();
-    }
-    process_exit(0);
-}
-
 static void test_suite_process(void)
 {
     run_all_tests();
     process_exit(0);
     for (;;)
         __asm__ volatile("hlt");
+}
+
+void keyboard_test_process(void)
+{
+    kprintf("\n=== Interactive Keyboard Test ===\n");
+    kprintf("Type 'help' for commands, 'exit' to quit\n\n");
+
+    char buffer[256];
+    while (1)
+    {
+        kprintf(" urix> ");
+        size_t len = keyboard_gets(buffer, sizeof(buffer));
+
+        if (len == 0)
+            continue;
+
+        if (strcmp(buffer, "exit") == 0 || strcmp(buffer, "quit") == 0)
+        {
+            kprintf("Exiting keyboard test...\n");
+            break;
+        }
+        else if (strcmp(buffer, "help") == 0)
+        {
+            kprintf("Available commands:\n");
+            kprintf("  help    - Show this help\n");
+            kprintf("  echo    - Echo test\n");
+            kprintf("  state   - Show keyboard state\n");
+            kprintf("  clear   - Clear screen\n");
+            kprintf("  ps      - Show process table\n");
+            kprintf("  exit    - Exit keyboard test\n");
+        }
+        else if (strcmp(buffer, "echo") == 0)
+        {
+            kprintf("Echo mode - type something:\n");
+            kprintf("> ");
+            keyboard_gets(buffer, sizeof(buffer));
+            kprintf("You typed: '%s'\n", buffer);
+        }
+        else if (strcmp(buffer, "state") == 0)
+        {
+            uint16_t state = keyboard_get_state();
+            kprintf("Keyboard state: 0x%x\n", state);
+            kprintf("  Shift: %s\n", (state & KB_SHIFT) ? "ON" : "OFF");
+            kprintf("  Ctrl:  %s\n", (state & KB_CTRL) ? "ON" : "OFF");
+            kprintf("  Alt:   %s\n", (state & KB_ALT) ? "ON" : "OFF");
+            kprintf("  Caps:  %s\n", (state & KB_CAPS_LOCK) ? "ON" : "OFF");
+            kprintf("  Num:   %s\n", (state & KB_NUM_LOCK) ? "ON" : "OFF");
+        }
+        else if (strcmp(buffer, "clear") == 0)
+        {
+            clear_screen();
+        }
+        else if (strcmp(buffer, "ps") == 0)
+        {
+            process_print_table();
+        }
+        else if (strcmp(buffer, "prntlg") == 0)
+        {
+            print_logo();
+        }
+        else
+        {
+            kprintf("Unknown command: '%s' (type 'help' for commands)\n", buffer);
+        }
+    }
+
+    kprintf("Keyboard test finished.\n");
+    process_exit(0);
 }
 
 void kernel_main(uint64_t mb_info_addr)
@@ -144,26 +202,35 @@ void kernel_main(uint64_t mb_info_addr)
             PANIC("VFS Manager failed to mount root filesystem");
     }
 
+    /* Initialize keyboard driver */
+    debug_kprintf("Initializing keyboard driver...\n");
+    keyboard_init();
+
+    /* Initialize process manager */
     process_init();
 
     if (test_mode)
     {
+        /* Test mode - run test suite */
         if (process_create((uint64_t)test_suite_process, "test-suite", PRIORITY_HIGH, PROCESS_KERNEL) < 0)
             PANIC("Failed to create test-suite process");
     }
     else
     {
-        process_create((uint64_t)test_process, "test1", PRIORITY_LOW, PROCESS_KERNEL);
-        process_create((uint64_t)test_process, "test2", PRIORITY_LOW, PROCESS_KERNEL);
-        process_create((uint64_t)test_process, "test3", PRIORITY_NORMAL, PROCESS_KERNEL);
-        process_create((uint64_t)test_process, "test4", PRIORITY_NORMAL, PROCESS_KERNEL);
-        process_create((uint64_t)test_process, "test5", PRIORITY_NORMAL, PROCESS_KERNEL);
-        process_create((uint64_t)test_process, "test6", PRIORITY_HIGH, PROCESS_KERNEL);
+        /* Default mode - keyboard test */
+        kprintf("\n=== Starting Keyboard Test ===\n\n");
+        if (process_create((uint64_t)keyboard_test_process, "kbd-test", PRIORITY_NORMAL, PROCESS_KERNEL) < 0)
+            PANIC("Failed to create keyboard test process");
     }
 
+    /* Unmask timer (IRQ0) and keyboard (IRQ1) */
     pic_unmask_irq(0);
+    pic_unmask_irq(1);
+
+    /* Enable interrupts */
     __asm__ volatile("sti");
 
+    /* Start scheduler */
     process_schedule();
 
     PANIC("Returned from scheduler");

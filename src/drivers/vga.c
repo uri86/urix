@@ -12,7 +12,6 @@
  *  - scrolling implemented by shifting lines up in buffer
  */
 
-
 #include <drivers/vga.h>
 #include <lib/string.h>
 #include <memory/vmm.h>
@@ -110,6 +109,20 @@ void console_putchar(char c)
     {
         console_column = (console_column + 8) & ~7;
     }
+    else if (c == '\b') // backspace: removes the last character and moves the buffer to the correct place.
+    {
+        if (console_column > 0)
+        {
+            console_column--;
+            console_putentryat(' ', console_color, console_column, console_row);
+        }
+        else if (console_row > 0)
+        {
+            console_row--;
+            console_column = VGA_WIDTH - 1;
+            console_putentryat(' ', console_color, console_column, console_row);
+        }
+    }
     else // normal character
     {
         console_putentryat(c, console_color, console_column, console_row);
@@ -166,11 +179,11 @@ void console_puts(const char *str)
 
 /*
  * console_update_address - Update the VGA buffer to its virtual address
- * * After vmm_init(), the physical address 0xB8000 is no longer 
- * identity-mapped once vmm_finish_init() runs. We must use the 
+ * * After vmm_init(), the physical address 0xB8000 is no longer
+ * identity-mapped once vmm_finish_init() runs. We must use the
  * higher-half direct map address instead.
  */
-void console_update_address(void) {
-    // KERNEL_VIRT_BASE + 0xB8000 = 0xFFFF8000000B8000
+void console_update_address(void)
+{
     console_buffer = (volatile uint16_t *)phys_to_virt(VGA_MEMORY);
 }
