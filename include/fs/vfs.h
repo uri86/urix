@@ -28,7 +28,7 @@ typedef struct mount mount_t;
 typedef struct filesystem filesystem_t;
 
 /*
- * Directory Entry structure for userspace iteration
+ * Directory Entry structure
  */
 typedef struct dirent
 {
@@ -87,7 +87,7 @@ struct mount
 {
     filesystem_t *fs;
     vnode_t *root;
-    void *fs_data; /* FS specific mount data (e.g., superblock) */
+    void *fs_data; /* FS specific mount data */
     char *mountpoint;
     mount_t *next;
 };

@@ -16,7 +16,7 @@ static void dummy_process(void)
     {
         process_yield();
     }
-    process_exit(0); // Then exit cleanly
+    process_exit(0); // Exit cleanly
 }
 
 void process_tests(void)

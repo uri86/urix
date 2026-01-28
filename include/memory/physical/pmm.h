@@ -21,28 +21,22 @@
 #include <stddef.h>
 #include <multiboot2.h>
 
-// Standard page size for paging.
 #define PAGE_SIZE 4096ULL
 
 // The identity map established by the bootloader/early kernel.
 #define EARLY_IDENTITY_LIMIT (1ULL << 30)
 
-#define EARLY_MAP_LIMIT (1ULL << 31)
+#define EARLY_MAP_LIMIT (1ULL << 30)
 
 // Maximum amount of RAM the kernel should track, set to 128 GiB.
-// This determines the required size of the PMM bitmap.
 #define MAX_PHYS_ADDR (128ULL * 1024 * 1024 * 1024)
 
-// We need 1 bit to track each 4KB page.
-// Size in bytes = (Max_Address / Page_Size) / 8
-// Size in bytes = (128 GiB / 4 KiB) / 8 = 4 MiB
 #define MAX_BITMAP_BYTES (MAX_PHYS_ADDR / PAGE_SIZE / 8)
 
 // Reserve space for page tables that the kernel needs to set up *before* it can use the VMM.
 // 8 MiB is a safe, conservative size that should fit in the first memory region.
 #define PT_RESERVE_BYTES (8ULL * 1024 * 1024)
 
-// allows to preallocate the array in pmm.c
 #define MAX_MEM_REGIONS 128
 typedef struct mem_region
 {
@@ -53,8 +47,10 @@ typedef struct mem_region
 
 /* Initialize the physical memory manager */
 void pmm_init(multiboot_size_tag *s);
+
 /* Allocate a single 4KB physical frame and return its address */
 uint64_t pmm_alloc_frame(void);
+
 /* Free a physical frame by marking it as available */
 void pmm_free_frame(uint64_t phys_addr);
 

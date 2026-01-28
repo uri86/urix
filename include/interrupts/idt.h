@@ -6,9 +6,7 @@
  *  - provide IDT initialization interface
  *  - expose exception handler registration
  * Notes:
- *  - IDT entries are 16 bytes in 64-bit mode
  *  - supports 256 interrupt vectors (0-255)
- *  - all handlers run at CPL=0 (kernel mode)
  */
 
 #ifndef IDT_H
@@ -16,15 +14,15 @@
 
 #include <stdint.h>
 
-// IDT entry structure (16 bytes in 64-bit mode)
+// IDT entry structure
 struct idt_entry
 {
-    uint16_t offset_low;  // Offset bits 0-15
-    uint16_t selector;    // Code segment selector
-    uint8_t ist;          // Interrupt Stack Table offset (bits 0-2), rest reserved
-    uint8_t type_attr;    // Type and attributes (P, DPL, S, Gate Type)
-    uint16_t offset_mid;  // Offset bits 16-31
-    uint32_t offset_high; // Offset bits 32-63
+    uint16_t offset_low;
+    uint16_t selector;
+    uint8_t ist;
+    uint8_t type_attr;
+    uint16_t offset_mid;
+    uint32_t offset_high;
     uint32_t zero;        // Reserved, must be zero
 } __attribute__((packed));
 
@@ -40,7 +38,7 @@ struct idt_ptr
 #define IDT_GATE_TRAP 0x8F      // Present, DPL=0, Type=Trap Gate
 #define IDT_GATE_TASK 0x85      // Present, DPL=0, Type=Task Gate
 
-// Exception vectors (0-31 are reserved by Intel)
+// Exception vectors
 #define EXC_DIVIDE_ERROR 0
 #define EXC_DEBUG 1
 #define EXC_NMI 2
@@ -66,7 +64,6 @@ struct idt_ptr
 
 /**
  * Initialize the Interrupt Descriptor Table.
- * Must be called early in kernel initialization, before any interrupts occur.
  */
 void idt_init(void);
 
@@ -75,15 +72,13 @@ void idt_init(void);
  *
  * vector - The interrupt vector number (0-255)
  * handler - Pointer to the interrupt handler function
- * selector - Code segment selector (typically 0x08)
- * type_attr - Type and attribute flags (use IDT_GATE_* constants)
+ * selector - Code segment selector
+ * type_attr - Type and attribute flags
  */
 void idt_set_gate(uint8_t vector, uint64_t handler, uint16_t selector, uint8_t type_attr);
 
 /**
  * Update the address stored inside the idtr pointer to reflect the virtual address.
- * Must be called before vmm_finish_init since after it runs,
- * the pointer is outdated and points to the physical memory.
  */
 void idt_update_for_higher_half(void);
 

@@ -128,13 +128,13 @@ void kernel_main(uint64_t mb_info_addr)
     if (cmd && strcmp((char *)cmd, "debug") == 0)
     {
         debug_mode = 1;
-        debug_delay_ms = 150;
+        debug_delay_ms = 300;
     }
     else if (cmd && strcmp((char *)cmd, "test") == 0)
     {
         test_mode = 1;
         debug_mode = 1;
-        debug_delay_ms = 100;
+        debug_delay_ms = 300;
     }
 
     clear_screen();

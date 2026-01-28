@@ -7,18 +7,9 @@
  *  - provide standardized PASS/FAIL reporting
  *  - enforce fail-fast behavior on test failure
  *
- * Design Constraints:
- *  - No dynamic memory allocation
- *  - No exception handling
- *  - No recovery after failure
- *
  * Failure Model:
  *  - Any failed assertion prints diagnostic information
  *  - The kernel halts immediately to preserve system state
- *
- * Notes:
- *  - This header MUST NOT be included outside the test subsystem.
- *  - All macros are designed to be safe in kernel context.
  */
 
 #ifndef __TEST_H

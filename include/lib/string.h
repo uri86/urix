@@ -1,12 +1,6 @@
 /*
  * Licensed under MIT License - URIX project.
  * string.h - String and number conversion helpers for URIX.
- * Responsibilities:
- *  - declare strlen, reverse, itoa, utoa
- *  - provide lightweight replacement for libc string/stdio utilities
- * Notes:
- *  - focused on kernel use (no malloc, no locale support)
- *  - supports integer bases 2–36
  */
 
 #ifndef STRING_H
@@ -84,18 +78,6 @@ char *utoa(uint64_t num, char *buffer, int base);
  *   <0 -> the first differing character in s1 is less than that in s2
  *   -1 -> one or both input pointers are NULL
  *
- * Notes / Known Limitations:
- *   - This function explicitly checks for NULL pointers and returns -1 if either
- *     string is NULL, rather than causing undefined behavior.
- *   - Both strings must be correctly null-terminated. If either is not, this
- *     function may access memory out of bounds, which can lead to a crash or
- *     page fault.
- *   - No maximum read length is enforced. If termination is not guaranteed, consider
- *     using a length-limited version (e.g., strncmp) to prevent potential infinite
- *     loops or invalid memory access.
- *   - The comparison uses unsigned char arithmetic for the return value, which is
- *     standard behavior but may give unexpected results with non-ASCII characters.
- *
  * Use only when you are certain the input strings are properly null-terminated.
  */
 int strcmp(const char *s1, const char *s2);
@@ -113,17 +95,6 @@ int strcmp(const char *s1, const char *s2);
  *   <0 -> the first differing character in s1 is less than that in s2
  *   -1 -> one or both input pointers are NULL
  *
- * Notes / Known Limitations:
- *   - If either pointer is NULL, returns -1 to prevent undefined behavior.
- *   - Comparison stops when:
- *        1. A differing character is found
- *        2. A null terminator ('\0') is reached
- *        3. n characters have been compared
- *   - Unlike strcmp, this function reduces risk of invalid memory access by
- *     enforcing a maximum read length. However, if n is too large and the string
- *     is not null-terminated within that range, it may still read unintended memory.
- *   - The return value is based on the difference between the unsigned char
- *     representations of the differing characters.
  *
  */
 int strncmp(const char *s1, const char *s2, size_t n);
@@ -138,11 +109,6 @@ int strncmp(const char *s1, const char *s2, size_t n);
  * Returns:
  *   Pointer to dest.
  *   Returns NULL if dest or src is NULL.
- *
- * Notes:
- *   - Does NOT guarantee null-termination if src length >= n.
- *   - Pads with '\0' bytes if src is shorter than n.
- *   - Caller must ensure dest has space for at least n bytes.
  */
 char *strncpy(char *dest, const char *src, size_t n);
 

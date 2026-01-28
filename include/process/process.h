@@ -9,49 +9,41 @@
 #include <stdint.h>
 #include <memory/vmm.h>
 
-/* Time slice for scheduling (in timer ticks) */
+/* Time slice for scheduling */
 #define TIME_SLICE 10
 
 /* Priority boost frequency to prevent starvation */
-#define PRIORITY_BOOST_THRESHOLD 50 /* ticks waiting before boost */
+#define PRIORITY_BOOST_THRESHOLD 50
 
-/* Process priority levels (0 = lowest, 4 = highest) */
 typedef enum
 {
-    PRIORITY_IDLE = 0,    /* Idle/background tasks */
-    PRIORITY_LOW = 1,     /* Low priority batch jobs */
-    PRIORITY_NORMAL = 2,  /* Normal user processes */
-    PRIORITY_HIGH = 3,    /* Interactive processes */
-    PRIORITY_REALTIME = 4 /* Real-time/kernel tasks */
+    PRIORITY_IDLE = 0,
+    PRIORITY_LOW = 1,
+    PRIORITY_NORMAL = 2,
+    PRIORITY_HIGH = 3,
+    PRIORITY_REALTIME = 4
 } process_priority_t;
 
 /* Process states */
 typedef enum
 {
-    PROCESS_STATE_READY = 0, /* Ready to run */
-    PROCESS_STATE_RUNNING,   /* Currently executing */
-    PROCESS_STATE_BLOCKED,   /* Waiting for I/O or event */
-    PROCESS_STATE_TERMINATED /* Finished execution */
+    PROCESS_STATE_READY = 0,
+    PROCESS_STATE_RUNNING,
+    PROCESS_STATE_BLOCKED,
+    PROCESS_STATE_TERMINATED
 } process_state_t;
-
-/* Process privilege levels */
 typedef enum
 {
-    PROCESS_KERNEL = 0, /* Ring 0 - kernel mode */
-    PROCESS_USER = 3    /* Ring 3 - user mode */
+    PROCESS_KERNEL = 0,
+    PROCESS_USER = 3
 } process_privilege_t;
 
-/*
- * CPU context saved during context switch
- * Layout matches what 'iretq' expects on stack for mode switches
- */
 typedef struct cpu_context
 {
-    /* General purpose registers (saved by software) */
+    /* General purpose registers */
     uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
     uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
 
-    /* Interrupt frame (saved by hardware) */
     uint64_t rip;    /* Instruction pointer */
     uint64_t cs;     /* Code segment */
     uint64_t rflags; /* CPU flags */
@@ -61,37 +53,33 @@ typedef struct cpu_context
 
 /*
  * Process Control Block (PCB)
- * Contains all state needed to manage a process
  */
 typedef struct process
 {
-    /* Identity */
-    uint32_t pid;  /* Process ID */
-    char name[32]; /* Process name for debugging */
+    uint32_t pid;
+    char name[32];
 
-    /* State */
-    process_state_t state;                 /* Current state */
-    process_priority_t priority;           /* Base priority level */
-    process_priority_t effective_priority; /* Current priority (after aging) */
-    process_privilege_t privilege;         /* Ring 0 or Ring 3 */
+    /* State of the proceess for context switching and priority scheduling */
+    process_state_t state;
+    process_priority_t priority;
+    process_priority_t effective_priority;
+    process_privilege_t privilege;
+    cpu_context_t context;
 
-    /* CPU context */
-    cpu_context_t context; /* Saved registers */
+    /* Memory information, includes everything needed for a process to run */
+    address_space_t *addr_space;
+    uint64_t kernel_stack_phys;
+    uint64_t kernel_stack_virt;
+    uint64_t user_stack;
 
-    /* Memory */
-    address_space_t *addr_space; /* Virtual address space */
-    uint64_t kernel_stack_phys;  /* Kernel stack (physical) */
-    uint64_t kernel_stack_virt;  /* Kernel stack (virtual) */
-    uint64_t user_stack;         /* User stack top (virtual) */
-
-    /* Scheduling info */
-    uint32_t time_slice_remaining; /* Ticks left in quantum */
-    uint64_t total_runtime;        /* Total CPU time used */
-    uint64_t wait_time;            /* Ticks spent waiting */
+    /* Scheduling info for priority scheduling and to prevent starvation */
+    uint32_t time_slice_remaining;
+    uint64_t total_runtime;
+    uint64_t wait_time;
 
     /* Queue links */
-    struct process *next_in_queue; /* Next process in ready queue */
-    struct process *next_all;      /* Next in global process list */
+    struct process *next_in_queue;
+    struct process *next_all;
 
 } process_t;
 
@@ -117,15 +105,6 @@ void process_init(void);
  *
  * Creates a new process with its own address space and stacks.
  * Process starts in READY state and will run when scheduled.
- *
- * For user processes (ring 3):
- *  - Uses user code/data segments (0x18, 0x20)
- *  - Sets up user stack in high memory
- *  - RFLAGS includes interrupt enable
- *
- * For kernel processes (ring 0):
- *  - Uses kernel code/data segments (0x08, 0x10)
- *  - Uses kernel stack only
  *
  * Returns: PID on success, -1 on failure
  */
@@ -167,13 +146,12 @@ int process_kill(uint32_t pid);
 
 process_t *process_get(uint32_t pid);
 
-
 /**
  * process_timer_tick - Handle timer interrupt
  *
  * Called every timer tick:
  *  - Decrements current process time slice
- *  - Increments wait time for ready processes (for aging)
+ *  - Increments wait time for ready processes
  *  - Triggers reschedule when time slice expires
  */
 void process_timer_tick(void);

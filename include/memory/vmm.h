@@ -9,7 +9,6 @@
  *  - transition kernel to higher-half mapping
  * Notes:
  *  - uses 4-level paging (PML4/PDPT/PD/PT)
- *  - kernel mapped at higher half (0xFFFF800000000000)
  *  - each process has its own PML4
  *  - identity mapping kept during transition for safety
  */
@@ -20,42 +19,22 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/*
- * Virtual Memory Layout
- * =====================
- *
- * User Space: 0x0000000000000000 - 0x00007FFFFFFFFFFF
- *   - Process private memory
- *   - Different for each process
- *   - Accessible only in that process's context
- *
- * Kernel Space (Upper Half): 0xFFFFFFFF80000000 - 0xFFFFFFFFFFFFFFFF
- *   - Kernel code and data
- *   - Shared across all processes
- *   - Only accessible in kernel mode
- *
- * Direct Map Region: KERNEL_VIRT_BASE + physical_address
- *   - All physical memory mapped at offset
- *   - Allows easy phys↔virt conversion
- *   - Example: physical 0x100000 → virtual 0xFFFFFFFF80100000
- */
-
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL /* Start of higher-half */
 #define USER_VIRT_BASE 0x0000000000400000ULL   /* 4MB - standard ELF load address */
-#define USER_STACK_TOP 0x0000800000000000ULL   /* Top of user space (512GB) */
-#define KERNEL_STACK_SIZE (16384ULL)           /* 16KB kernel stack per process */
+#define USER_STACK_TOP 0x0000800000000000ULL
+#define KERNEL_STACK_SIZE (16384ULL)
 
 /* Page table entry flags */
-#define VMM_PRESENT 0x001ULL         /* Page is present in memory */
-#define VMM_WRITE 0x002ULL           /* Page is writable */
-#define VMM_USER 0x004ULL            /* Page accessible in user mode */
-#define VMM_WRITETHROUGH 0x008ULL    /* Write-through caching */
-#define VMM_CACHE_DISABLE 0x010ULL   /* Disable caching */
-#define VMM_ACCESSED 0x020ULL        /* Page was accessed (set by CPU) */
-#define VMM_DIRTY 0x040ULL           /* Page was written to (set by CPU) */
-#define VMM_HUGE 0x080ULL            /* Huge page (2MB) */
-#define VMM_GLOBAL 0x100ULL          /* Global page (not flushed on CR3 change) */
-#define VMM_NX 0x8000000000000000ULL /* No execute */
+#define VMM_PRESENT 0x001ULL
+#define VMM_WRITE 0x002ULL
+#define VMM_USER 0x004ULL
+#define VMM_WRITETHROUGH 0x008ULL
+#define VMM_CACHE_DISABLE 0x010ULL
+#define VMM_ACCESSED 0x020ULL
+#define VMM_DIRTY 0x040ULL
+#define VMM_HUGE 0x080ULL
+#define VMM_GLOBAL 0x100ULL
+#define VMM_NX 0x8000000000000000ULL
 
 /* Common flag combinations */
 #define VMM_KERNEL_FLAGS (VMM_PRESENT | VMM_WRITE)
@@ -65,13 +44,11 @@
  * Address Space Structure
  *
  * Represents a complete virtual address space.
- * Contains the PML4 (top-level page table) both as physical address
- * (for loading into CR3) and virtual address (for manipulation).
  */
 typedef struct address_space
 {
-    uint64_t pml4_phys;  /* Physical address of PML4 (for CR3) */
-    uint64_t *pml4_virt; /* Virtual address of PML4 (for editing) */
+    uint64_t pml4_phys;  /* Physical address of PML4 */
+    uint64_t *pml4_virt; /* Virtual address of PML4 */
 } address_space_t;
 
 /**
@@ -81,10 +58,6 @@ typedef struct address_space
  *  1. Creates kernel address space with higher-half mapping
  *  2. Maps all physical memory to KERNEL_VIRT_BASE
  *  3. Keeps identity mapping during transition for safety
- *  4. Prepares for process creation
- *
- * Must be called after PMM is initialized.
- * After this, use phys_to_virt() for all kernel memory access.
  */
 void vmm_init(void);
 
@@ -92,12 +65,9 @@ void vmm_init(void);
  * vmm_finish_init - Complete VMM initialization and switch to higher-half
  *
  * This function:
- *  1. Removes identity mapping (no longer needed)
+ *  1. Removes identity mapping
  *  2. Updates all kernel pointers to use higher-half addresses
  *  3. Flushes TLB
- *
- * Called after all early initialization is done.
- * After this, low addresses are available.
  */
 void vmm_finish_init(void);
 
@@ -105,7 +75,7 @@ void vmm_finish_init(void);
  * vmm_create_address_space - Create a new address space for a process
  *
  * Creates a new PML4 and copies kernel mappings into it.
- * User space (lower half) is initially empty.
+ * User space is initially empty.
  *
  * Returns pointer to address_space_t or NULL on failure.
  */
@@ -114,8 +84,7 @@ address_space_t *vmm_create_address_space(void);
 /**
  * vmm_destroy_address_space - Destroy an address space
  *
- * Frees all page tables in user space (lower half).
- * Does NOT free the physical frames mapped (caller's responsibility).
+ * Frees all page tables in user space.
  * Does NOT touch kernel mappings (shared across all processes).
  *
  * as: address space to destroy (must not be currently active)
@@ -126,8 +95,8 @@ void vmm_destroy_address_space(address_space_t *as);
  * vmm_switch_address_space - Switch to a different address space
  *
  * Loads the PML4 into CR3, changing the active page tables.
- * Kernel mappings remain the same (upper half is shared).
- * User mappings change (lower half is process-specific).
+ * Kernel mappings remain the same.
+ * User mappings change.
  *
  * as: address space to switch to (NULL = kernel space only)
  */
@@ -142,7 +111,7 @@ void vmm_switch_address_space(address_space_t *as);
  * as: address space (NULL = current/kernel)
  * virt_addr: virtual address to map (must be page-aligned)
  * phys_addr: physical address to map to (must be page-aligned)
- * flags: page flags (VMM_PRESENT, VMM_WRITE, VMM_USER, etc.)
+ * flags: page flags
  *
  * Returns 0 on success, -1 on failure.
  */
@@ -179,7 +148,6 @@ uint64_t vmm_get_physical(address_space_t *as, uint64_t virt_addr);
  * vmm_get_kernel_space - Get the kernel address space
  *
  * Returns pointer to the global kernel address_space_t.
- * All processes share kernel mappings from this space.
  */
 address_space_t *vmm_get_kernel_space(void);
 
@@ -200,7 +168,7 @@ static inline void *phys_to_virt(uint64_t phys)
  * virt_to_phys - Convert virtual address to physical (kernel direct map)
  *
  * Only works for kernel direct-mapped addresses (KERNEL_VIRT_BASE+).
- * Does NOT work for arbitrary virtual addresses!
+ * Does NOT work for arbitrary virtual addresses.
  *
  * Example: virt_to_phys(0xFFFFFFFF80100000) → 0x100000
  */

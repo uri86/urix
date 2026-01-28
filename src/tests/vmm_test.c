@@ -5,10 +5,6 @@
  * Responsibilities:
  *  - verify virtual-to-physical mappings
  *  - validate page table walking and unmapping
- *
- * Safety:
- *  - Tests only use a dedicated virtual address range.
- *  - Kernel identity and higher-half mappings are untouched.
  */
 
 #include <tests/__test.h>

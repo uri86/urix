@@ -4,11 +4,7 @@
  *
  * Responsibilities:
  *  - verify correctness of basic string operations
- *  - validate edge cases (NULL handling, padding, termination)
- *
- * Notes:
- *  - These tests are non-destructive and order-independent.
- *  - They must pass before any higher-level subsystems are tested.
+ *  - validate edge cases
  */
 
 #include <tests/__test.h>

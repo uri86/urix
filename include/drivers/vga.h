@@ -3,10 +3,8 @@
  * vga.h - VGA text mode driver header.
  * Responsibilities:
  *  - define VGA dimensions, memory address, and colors
- *  - declare functions for text mode operations (print, clear, scroll)
  * Notes:
  *  - provides enum vga_color_t for 16 VGA colors
- *  - API designed for simplicity and compatibility with URIX console
  */
 
 #ifndef VGA_H
@@ -73,7 +71,7 @@ void console_putentryat(char c, uint8_t color, size_t x, size_t y);
 void console_scroll_up(void);
 
 /*
-* adds one character to the screen, handles \n \t and \r
+* adds one character to the screen, handles \n \t \r and \b
 * moves a line down if the line is too long (longer than the screen size)
 */
 void console_putchar(char c);
@@ -99,10 +97,7 @@ void console_clear(void);
 void console_puts(const char *str);
 
 /*
- * console_update_address - Update the VGA buffer to its virtual address
- * * After vmm_init(), the physical address 0xB8000 is no longer 
- * identity-mapped once vmm_finish_init() runs. We must use the 
- * higher-half direct map address instead.
+ * console_update_address - Update the VGA buffer to its virtual address.
  */
 void console_update_address(void);
 #endif

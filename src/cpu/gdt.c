@@ -76,8 +76,8 @@ static void gdt_set_tss(int num, uint64_t tss_addr)
     gdt[num].limit_low = limit & 0xFFFF;
     gdt[num].base_low = base & 0xFFFF;
     gdt[num].base_middle = (base >> 16) & 0xFF;
-    gdt[num].access = GDT_TSS_ACCESS;                              /* Present, Ring 0, Available TSS */
-    gdt[num].granularity = ((limit >> 16) & 0x0F) | GDT_GRAN_BYTE; /* Byte granularity for TSS */
+    gdt[num].access = GDT_TSS_ACCESS;
+    gdt[num].granularity = ((limit >> 16) & 0x0F) | GDT_GRAN_BYTE;
     gdt[num].base_high = (base >> 24) & 0xFF;
 
     /* Second entry (upper 8 bytes) - cast to tss_entry_t for convenience */
@@ -94,15 +94,11 @@ void gdt_init(void)
     memset(&gdt, 0, sizeof(gdt));
     memset(&tss, 0, sizeof(tss));
 
-    /*
-     * Entry 0: Null descriptor
-     * Required by x86 architecture - must be all zeros
-     */
     gdt_set_gate(0, 0, 0, 0, 0);
-    kprintf("Entry 0: Null descriptor\n");
+    debug_kprintf("Entry 0: Null descriptor\n");
 
     /*
-     * Entry 1: Kernel Code Segment (64-bit, ring 0)
+     * Kernel Code Segment (64-bit, ring 0)
      *
      * Access: Present | Ring0 | Code/Data | Executable | Readable
      * Granularity: 64-bit long mode
@@ -113,10 +109,10 @@ void gdt_init(void)
                  GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_CODESEG |
                      GDT_ACCESS_EXECUTABLE | GDT_ACCESS_READWRITE,
                  GDT_GRAN_64BIT | GDT_GRAN_4K);
-    kprintf("Entry 1: Kernel Code (Ring 0, 64-bit)\n");
+    debug_kprintf("Entry 1: Kernel Code (Ring 0, 64-bit)\n");
 
     /*
-     * Entry 2: Kernel Data Segment (ring 0)
+     * Kernel Data Segment (ring 0)
      *
      * Access: Present | Ring0 | Code/Data | Writable
      * Granularity: 32-bit
@@ -127,23 +123,21 @@ void gdt_init(void)
                  GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_CODESEG |
                      GDT_ACCESS_READWRITE,
                  GDT_GRAN_32BIT | GDT_GRAN_4K);
-    kprintf("Entry 2: Kernel Data (Ring 0)\n");
+    debug_kprintf("Entry 2: Kernel Data (Ring 0)\n");
 
     /*
-     * Entry 3: User Code Segment (64-bit, ring 3)
+     * User Code Segment (64-bit, ring 3)
      *
      * Same as kernel code but with Ring 3 privilege.
-     * We're setting this up now even though we won't use it immediately.
-     * This way, when you transition to ring 3, you just need to switch segments.
      */
     gdt_set_gate(3, 0, 0xFFFFFFFF,
                  GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_CODESEG |
                      GDT_ACCESS_EXECUTABLE | GDT_ACCESS_READWRITE,
                  GDT_GRAN_64BIT | GDT_GRAN_4K);
-    kprintf("Entry 3: User Code (Ring 3, 64-bit) - for future\n");
+    debug_kprintf("Entry 3: User Code (Ring 3, 64-bit)\n");
 
     /*
-     * Entry 4: User Data Segment (ring 3)
+     * User Data Segment (ring 3)
      *
      * Used for data access in user mode.
      */
@@ -151,21 +145,17 @@ void gdt_init(void)
                  GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_CODESEG |
                      GDT_ACCESS_READWRITE,
                  GDT_GRAN_32BIT | GDT_GRAN_4K);
-    kprintf("Entry 4: User Data (Ring 3) - for future\n");
+    debug_kprintf("Entry 4: User Data (Ring 3)\n");
 
     /*
-     * Entries 5-6: TSS (Task State Segment)
-     *
-     * The TSS is critical for privilege level changes.
-     * When switching from ring 3 to ring 0 (e.g., on interrupt),
-     * the CPU loads RSP from the TSS to get the kernel stack.
+     * TSS (Task State Segment)
      */
     gdt_set_tss(5, (uint64_t)&tss);
     kprintf("Entry 5-6: TSS at %llx\n", (uint64_t)&tss);
 
     /* Initialize TSS */
-    tss.rsp0 = 0;                    /* Will be set per-process later */
-    tss.iopb_offset = sizeof(tss_t); /* No I/O permission bitmap */
+    tss.rsp0 = 0;
+    tss.iopb_offset = sizeof(tss_t);
 
     /* Set up GDT pointer */
     gdt_ptr.limit = sizeof(gdt) - 1;
@@ -185,18 +175,10 @@ void gdt_init(void)
 
 void gdt_set_kernel_stack(uint64_t stack_top)
 {
-    /*
-     * Set RSP0 in TSS
-     *
-     * This is the stack pointer that will be loaded when
-     * switching from ring 3 to ring 0 (e.g., on system call or interrupt).
-     */
     tss.rsp0 = stack_top;
 }
 
 void gdt_update_for_higher_half(void) {
-    // Assuming 'gdt_ptr' is your global struct and 'gdt' is your table
-    // We update the base to the virtual address
     gdt_ptr.base = (uint64_t)phys_to_virt(virt_to_phys(&gdt));
     
     // Reload the GDTR register with the new virtual address

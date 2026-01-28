@@ -5,10 +5,6 @@
  * Responsibilities:
  *  - invoke all kernel test suites in a deterministic order
  *  - provide a single integration point for kernel_main
- *
- * Notes:
- *  - Tests must be ordered to respect subsystem dependencies.
- *  - Earlier tests may establish assumptions for later ones.
  */
 
 #include <tests/test.h>

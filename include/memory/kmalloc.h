@@ -1,12 +1,6 @@
 /*
  * Licensed under MIT License - URIX project.
  * kmalloc.h - Kernel dynamic memory allocator interface.
- *
- * This module provides the primary heap allocation for the kernel.
- * Design overview:
- *  - Small allocations are served from slab allocators (size classes).
- *  - Large allocations are backed directly by page allocations.
- *  - Allocation metadata is stored inline and is opaque to callers.
  */
 
 #ifndef KMALLOC_H

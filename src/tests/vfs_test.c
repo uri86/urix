@@ -165,7 +165,7 @@ void vfs_directory_tests(void)
     TEST_ASSERT(vfs_mkdir("/docs") == 0, "create docs directory");
     TEST_ASSERT(vfs_mkdir("/data") == 0, "create data directory");
 
-    /* Try to create duplicate directory (should fail) */
+    /* Try to create duplicate directory */
     int result = vfs_mkdir("/mydir");
     TEST_ASSERT(result != 0, "duplicate directory creation fails");
 

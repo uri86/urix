@@ -6,10 +6,6 @@
  *  - install default exception handlers for CPU exceptions
  *  - provide interface for setting custom interrupt handlers
  *  - load IDT into the CPU
- * Notes:
- *  - IDT must be initialized before enabling interrupts
- *  - default handlers print debug info and halt
- *  - handlers preserve CPU state for debugging
  */
 
 #include <interrupts/idt.h>
@@ -20,13 +16,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// IDT table (256 entries for all interrupt vectors)
+// IDT table
 static struct idt_entry idt[256];
 
 // IDT descriptor
 static struct idt_ptr idtr;
 
-// Forward declarations for exception handlers (defined in idt_handlers.S)
+// Forward declarations for exception handlers
 extern void isr0(void);
 extern void isr1(void);
 extern void isr2(void);
@@ -116,7 +112,7 @@ void idt_set_gate(uint8_t vector, uint64_t handler, uint16_t selector, uint8_t t
 {
     idt[vector].offset_low = handler & 0xFFFF;
     idt[vector].selector = selector;
-    idt[vector].ist = 0; // No IST for now
+    idt[vector].ist = 0;
     idt[vector].type_attr = type_attr;
     idt[vector].offset_mid = (handler >> 16) & 0xFFFF;
     idt[vector].offset_high = (handler >> 32) & 0xFFFFFFFF;
@@ -141,8 +137,7 @@ void idt_init(void)
         idt[i].zero = 0;
     }
 
-    // Install exception handlers (vectors 0-31)
-    // Code segment selector is 0x08
+    // Install exception handlers
     idt_set_gate(0, (uint64_t)isr0, 0x08, IDT_GATE_INTERRUPT);
     idt_set_gate(1, (uint64_t)isr1, 0x08, IDT_GATE_INTERRUPT);
     idt_set_gate(2, (uint64_t)isr2, 0x08, IDT_GATE_INTERRUPT);
@@ -176,7 +171,7 @@ void idt_init(void)
     idt_set_gate(30, (uint64_t)isr30, 0x08, IDT_GATE_INTERRUPT);
     idt_set_gate(31, (uint64_t)isr31, 0x08, IDT_GATE_INTERRUPT);
 
-    // Install IRQ handlers (vectors 32-47)
+    // Install IRQ handlers
     idt_set_gate(32, (uint64_t)isr32, 0x08, IDT_GATE_INTERRUPT);
     idt_set_gate(33, (uint64_t)isr33, 0x08, IDT_GATE_INTERRUPT);
     idt_set_gate(34, (uint64_t)isr34, 0x08, IDT_GATE_INTERRUPT);
@@ -198,7 +193,7 @@ void idt_init(void)
     __asm__ volatile("lidt %0" : : "m"(idtr));
 }
 
-// Structure to hold CPU state during exception
+// CPU state during exception
 struct interrupt_frame
 {
     uint64_t r15, r14, r13, r12, r11, r10, r9, r8;

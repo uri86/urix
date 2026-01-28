@@ -10,7 +10,6 @@
  *  - uses 4-level page tables (PML4, PDPT, PD, PT)
  *  - PAGE_PRESENT_RW combines present and writable flags
  *  - identity_map_all maps virtual addresses equal to physical addresses
- *  - allocator functions may be called externally if needed
  */
 
 #ifndef IDENTITY_MAP_H
@@ -27,7 +26,7 @@
 #define PAGE_USER 0x4ULL
 #define PAGE_PRESENT_RW (PAGE_PRESENT | PAGE_WRITE)
 
-/* Initialize the page table allocator (if needed externally) */
+/* Initialize the page table allocator */
 void pt_alloc_init(uint64_t start_phys, uint64_t limit_phys);
 
 /* Allocate one page for page tables (returns physical address or 0 on fail) */

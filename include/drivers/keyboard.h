@@ -19,7 +19,7 @@
 #define KEYBOARD_STATUS_PORT 0x64
 #define KEYBOARD_COMMAND_PORT 0x64
 
-/* Special key codes (non-ASCII) */
+/* Special key codes */
 #define KEY_ESC 0x1B
 #define KEY_BACKSPACE 0x08
 #define KEY_TAB 0x09
@@ -71,9 +71,6 @@
 
 /**
  * keyboard_init - Initialize the keyboard driver
- *
- * Initializes keyboard state.
- * Must be called after IDT and PIC initialization.
  */
 void keyboard_init(void);
 
@@ -88,7 +85,7 @@ void keyboard_init(void);
 char keyboard_getchar(void);
 
 /**
- * keyboard_getchar_blocking - Read character (blocking)
+ * keyboard_getchar_blocking - Read character
  *
  * Waits until a key is pressed and returns it.
  *

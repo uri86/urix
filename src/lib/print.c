@@ -6,9 +6,6 @@
  *  - wrap low-level VGA/console calls
  *  - support integers (signed/unsigned), hex, binary, strings
  *  - manage text color and screen clearing
- * Notes:
- *  - implements kvsnprintf as a minimal formatting engine
- *  - handles 32-bit, long, and long long specifiers
  */
 
 #include <stdarg.h>
@@ -69,7 +66,7 @@ void kprintf(const char *fmt, ...)
 }
 
 /**
- * kvsnprintf - printf core (minimal subset)
+ * kvsnprintf - printf core
  */
 void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 {
@@ -158,7 +155,7 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 }
                 else
                 {
-                    // single 'l' (e.g., %ld, %lu, %lx)
+                    // single 'l'
                     fmt++;
                     unsigned long value = va_arg(args, unsigned long);
                     char tmp[64];
@@ -190,7 +187,7 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 }
             }
 
-            else // unknown specifier → print literally
+            else // unknown specifier
             {
                 buf[i++] = '%';
                 buf[i++] = *fmt;

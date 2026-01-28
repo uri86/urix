@@ -7,10 +7,6 @@
 #  - call high-level C exception handler
 #  - restore CPU state on return
 #
-# Notes:
-#  - some exceptions push error codes, others don't
-#  - we push dummy error code (0) for consistency
-#  - all registers are preserved across interrupts
 
 .section .text
 .code64
@@ -30,21 +26,21 @@ isr\num:
 .global isr\num
 .type isr\num, @function
 isr\num:
-    pushq $\num               # Push interrupt number (error code already pushed)
+    pushq $\num               # Push interrupt number
     jmp isr_common_stub
 .endm
 
-# Macro for IRQ handlers (these go to IRQ handler, not exception handler)
+# Macro for IRQ handlers
 .macro IRQ_HANDLER num
 .global isr\num
 .type isr\num, @function
 isr\num:
     pushq $0                  # Push dummy error code
     pushq $\num               # Push interrupt number
-    jmp irq_common_stub       # Jump to IRQ handler
+    jmp irq_common_stub
 .endm
 
-# Define all 32 exception handlers
+# Define exception handlers
 ISR_NOERR 0     # Division By Zero
 ISR_NOERR 1     # Debug
 ISR_NOERR 2     # Non Maskable Interrupt
@@ -53,32 +49,33 @@ ISR_NOERR 4     # Overflow
 ISR_NOERR 5     # Bound Range Exceeded
 ISR_NOERR 6     # Invalid Opcode
 ISR_NOERR 7     # Device Not Available
-ISR_ERR   8     # Double Fault (pushes error code)
+ISR_ERR   8     # Double Fault
 ISR_NOERR 9     # Coprocessor Segment Overrun
-ISR_ERR   10    # Invalid TSS (pushes error code)
-ISR_ERR   11    # Segment Not Present (pushes error code)
-ISR_ERR   12    # Stack-Segment Fault (pushes error code)
-ISR_ERR   13    # General Protection Fault (pushes error code)
-ISR_ERR   14    # Page Fault (pushes error code)
-ISR_NOERR 15    # Reserved
+ISR_ERR   10    # Invalid TSS
+ISR_ERR   11    # Segment Not Present
+ISR_ERR   12    # Stack-Segment Fault
+ISR_ERR   13    # General Protection Fault
+ISR_ERR   14    # Page Fault
+ISR_NOERR 15
 ISR_NOERR 16    # x87 Floating-Point Exception
-ISR_ERR   17    # Alignment Check (pushes error code)
+ISR_ERR   17    # Alignment Check
 ISR_NOERR 18    # Machine Check
 ISR_NOERR 19    # SIMD Floating-Point Exception
 ISR_NOERR 20    # Virtualization Exception
-ISR_ERR   21    # Control Protection Exception (pushes error code)
-ISR_NOERR 22    # Reserved
-ISR_NOERR 23    # Reserved
-ISR_NOERR 24    # Reserved
-ISR_NOERR 25    # Reserved
-ISR_NOERR 26    # Reserved
-ISR_NOERR 27    # Reserved
-ISR_NOERR 28    # Reserved
-ISR_NOERR 29    # Reserved
-ISR_NOERR 30    # Reserved
-ISR_NOERR 31    # Reserved
+ISR_ERR   21    # Control Protection Exception
+# 22 to 31 are reserved
+ISR_NOERR 22
+ISR_NOERR 23
+ISR_NOERR 24
+ISR_NOERR 25
+ISR_NOERR 26
+ISR_NOERR 27
+ISR_NOERR 28
+ISR_NOERR 29
+ISR_NOERR 30
+ISR_NOERR 31
 
-# Define IRQ handlers (vectors 32-47) - these use IRQ_HANDLER macro
+# Define IRQ handlers
 IRQ_HANDLER 32    # IRQ0 - Timer
 IRQ_HANDLER 33    # IRQ1 - Keyboard
 IRQ_HANDLER 34    # IRQ2 - Cascade
@@ -88,15 +85,16 @@ IRQ_HANDLER 37    # IRQ5 - LPT2
 IRQ_HANDLER 38    # IRQ6 - Floppy
 IRQ_HANDLER 39    # IRQ7 - LPT1
 IRQ_HANDLER 40    # IRQ8 - RTC
-IRQ_HANDLER 41    # IRQ9 - Free
-IRQ_HANDLER 42    # IRQ10 - Free
-IRQ_HANDLER 43    # IRQ11 - Free
+# 9 - 11 Free for use
+IRQ_HANDLER 41
+IRQ_HANDLER 42
+IRQ_HANDLER 43
 IRQ_HANDLER 44    # IRQ12 - PS2 Mouse
 IRQ_HANDLER 45    # IRQ13 - FPU
 IRQ_HANDLER 46    # IRQ14 - Primary ATA
 IRQ_HANDLER 47    # IRQ15 - Secondary ATA
 
-# Common stub for exceptions - saves state and calls C handler
+# Common stub for exceptions, saves state and calls C handler
 isr_common_stub:
     # Save all general purpose registers
     pushq %rax
@@ -115,8 +113,7 @@ isr_common_stub:
     pushq %r14
     pushq %r15
 
-    # Call C exception handler with pointer to interrupt frame
-    movq %rsp, %rdi           # First argument: pointer to stack frame
+    movq %rsp, %rdi # pointer to stack frame
     call exception_handler
 
     # Restore all general purpose registers
@@ -142,7 +139,7 @@ isr_common_stub:
     # Return from interrupt
     iretq
 
-# Common stub for IRQs - saves state and calls IRQ handler
+# Common stub for IRQs, saves state and calls IRQ handler
 irq_common_stub:
     # Save all general purpose registers
     pushq %rax
@@ -161,7 +158,7 @@ irq_common_stub:
     pushq %r14
     pushq %r15
 
-    # Call IRQ handler (not exception handler!)
+    # Call IRQ handler
     movq %rsp, %rdi
     call irq_handler
 

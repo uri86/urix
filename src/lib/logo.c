@@ -5,9 +5,6 @@
  *  - store the URIX logo as ASCII strings
  *  - print the logo to screen using VGA text mode
  *  - manage color changes before and after logo output
- * Notes:
- *  - uses kprintf() from print.c
- *  - colors default to cyan for logo and green after
  */
 
 #include <lib/print.h>

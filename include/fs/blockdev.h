@@ -41,10 +41,10 @@ struct blockdev
     char name[BLOCKDEV_MAX_NAME];
     uint8_t type;
 
-    uint32_t sector_size;  /* Usually 512 bytes */
-    uint64_t sector_count; /* Total LBA count */
+    uint32_t sector_size;
+    uint64_t sector_count;
 
-    void *driver_data;   /* Private driver data (e.g., port base) */
+    void *driver_data;   /* Private driver data */
     blockdev_ops_t *ops; /* Operations table */
 
     blockdev_t *next; /* Linked list next pointer */

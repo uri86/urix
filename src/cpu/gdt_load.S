@@ -5,12 +5,6 @@
 #  - Load new GDT into CPU
 #  - Reload segment registers with new selectors
 #  - Load TSS register
-#
-# Notes:
-#  - LGDT instruction loads GDT register
-#  - After loading GDT, must reload all segment registers
-#  - CS (code segment) requires far return to reload
-#  - TSS loaded with LTR (Load Task Register) instruction
 
 .section .text
 .code64
@@ -30,9 +24,6 @@
 .type gdt_load, @function
 gdt_load:
     # Load the new GDT
-    # LGDT takes a pointer to a 10-byte structure:
-    #   2 bytes: limit (size of GDT - 1)
-    #   8 bytes: base address of GDT
     lgdt (%rdi)
 
     # Reload data segment registers
@@ -46,9 +37,6 @@ gdt_load:
     movw %ax, %ss
 
     # Reload code segment (CS)
-    # CS cannot be loaded directly with MOV
-    # We must use a far return which pops CS:RIP from stack
-    # 
     # Push new CS selector (0x08 = GDT_KERNEL_CODE)
     # Push return address (.reload_cs label)
     # Execute far return (RETFQ = return far 64-bit)

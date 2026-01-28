@@ -5,10 +5,6 @@
  * Responsibilities:
  *  - verify correct allocation and freeing of physical frames
  *  - ensure frame uniqueness and reuse
- *
- * Design Constraints:
- *  - Tests do NOT assume specific physical addresses.
- *  - Only ownership semantics are validated.
  */
 
 #include <tests/__test.h>

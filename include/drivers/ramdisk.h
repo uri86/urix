@@ -4,9 +4,6 @@
  * Responsibilities:
  * - Declare RAM disk creation and management functions
  * - Provide interface for loading filesystem images
- * Notes:
- * - Useful for testing filesystems without hardware latency
- * - Data is volatile and lost on reboot
  */
 
 #ifndef RAMDISK_H

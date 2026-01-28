@@ -30,7 +30,7 @@ static char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
 static volatile size_t buffer_read = 0;
 static volatile size_t buffer_write = 0;
 
-/* US QWERTY scancode to ASCII mapping (Set 1) */
+/* QWERTY scancode to ASCII mapping */
 static const char scancode_to_ascii[] = {
     0, 0x1B, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0','-','=', '\b','\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o',
     'p', '[', ']', '\n', 0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\', 'z', 'x', 'c', 'v', 'b', 'n',

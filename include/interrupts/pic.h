@@ -20,16 +20,16 @@
 
 /* PIC initialization commands */
 #define ICW1_ICW4 0x01      /* ICW4 needed */
-#define ICW1_SINGLE 0x02    /* Single (cascade) mode */
-#define ICW1_INTERVAL4 0x04 /* Call address interval 4 (8) */
-#define ICW1_LEVEL 0x08     /* Level triggered (edge) mode */
-#define ICW1_INIT 0x10      /* Initialization command */
+#define ICW1_SINGLE 0x02
+#define ICW1_INTERVAL4 0x04
+#define ICW1_LEVEL 0x08
+#define ICW1_INIT 0x10
 
-#define ICW4_8086 0x01       /* 8086/88 (MCS-80/85) mode */
-#define ICW4_AUTO 0x02       /* Auto (normal) EOI */
-#define ICW4_BUF_SLAVE 0x08  /* Buffered mode/slave */
-#define ICW4_BUF_MASTER 0x0C /* Buffered mode/master */
-#define ICW4_SFNM 0x10       /* Special fully nested (not) */
+#define ICW4_8086 0x01
+#define ICW4_AUTO 0x02       /* Auto EOI */
+#define ICW4_BUF_SLAVE 0x08
+#define ICW4_BUF_MASTER 0x0C
+#define ICW4_SFNM 0x10
 
 /* EOI command */
 #define PIC_EOI 0x20
@@ -37,8 +37,8 @@
 /**
  * pic_init - Initialize and remap the PICs
  *
- * Remaps PIC1 to start at offset1 (usually 0x20/32)
- * Remaps PIC2 to start at offset2 (usually 0x28/40)
+ * Remaps PIC1 to start at offset1
+ * Remaps PIC2 to start at offset2
  * This prevents conflicts with CPU exceptions (0-31)
  */
 void pic_init(uint8_t offset1, uint8_t offset2);
@@ -47,9 +47,6 @@ void pic_init(uint8_t offset1, uint8_t offset2);
  * pic_send_eoi - Send End of Interrupt signal
  *
  * irq: IRQ number (0-15)
- *
- * Must be called at the end of interrupt handlers
- * to signal the PIC that the interrupt has been handled
  */
 void pic_send_eoi(uint8_t irq);
 

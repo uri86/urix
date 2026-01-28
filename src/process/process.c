@@ -353,7 +353,7 @@ process_t *process_get(uint32_t pid)
 
 int process_kill(uint32_t pid)
 {
-    /* Never kill idle */
+    // Never kill idle
     if (pid == 0)
         return -1;
 
@@ -361,16 +361,15 @@ int process_kill(uint32_t pid)
     if (!p)
         return -1;
 
-    /* Cannot kill currently running process - it must exit itself */
+    // Cannot kill currently running process - it must exit on its own
     if (p == current_process)
     {
         return -1;
     }
 
-    /* Disable interrupts while we manipulate process lists */
     __asm__ volatile("cli");
 
-    /* Remove from ready queue if present */
+    // Remove from ready queue if present
     ready_queue_t *q = &ready_queues[p->effective_priority];
     process_t *rq_prev = NULL;
     process_t *rq = q->head;
@@ -414,8 +413,6 @@ int process_kill(uint32_t pid)
     }
 
     total_processes--;
-
-    /* Re-enable interrupts */
     __asm__ volatile("sti");
 
     /* Cleanup resources */

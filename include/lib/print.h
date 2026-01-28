@@ -1,13 +1,6 @@
 /*
  * Licensed under MIT License - URIX project.
  * print.h - Console printing interface for URIX.
- * Responsibilities:
- *  - declare printf-style output (kprintf)
- *  - declare screen management (clear_screen, set_color)
- *  - provide number formatting (print_uint64, print_hex)
- * Notes:
- *  - depends on vga.h for color and display control
- *  - formatting core (kvsnprintf) defined in print.c
  */
 
 #ifndef PRINT_H
@@ -18,19 +11,16 @@
 
 /*
  * debug_kprintf - a simple function enclosure for kprintf that only runs when the debug option is selected.
- * fmt - a constat character array (string), terminated by 0x0
- * ... - variables to be inserted into the string (formatting).
  */
 void debug_kprintf(const char *fmt, ...);
 
 /*
  * takes a string with formatting and prints it correctly
- * uses functions from terminal.c
  */
 void kprintf(const char *fmt, ...);
 
 /*
- * wraps the function "screen_initialize" from terminal.c
+ * wraps the function "screen_initialize"
  */
 void clear_screen(void);
 
@@ -52,7 +42,7 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args);
 void print_uint64(uint64_t value);
 
 /*
- * takes an unsigned 64 bit integer and prints it onto the screen in hexadecimal (base 16)
+ * takes an unsigned 64 bit integer and prints it onto the screen in hex
  */
 void print_hex(uint64_t value);
 

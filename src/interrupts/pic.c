@@ -24,7 +24,7 @@ static inline uint8_t inb(uint16_t port)
     return ret;
 }
 
-/* I/O wait - small delay for old hardware */
+/* I/O wait */
 static inline void io_wait(void)
 {
     outb(0x80, 0);
@@ -32,47 +32,36 @@ static inline void io_wait(void)
 
 void pic_init(uint8_t offset1, uint8_t offset2)
 {
-    /* Start initialization sequence (ICW1) */
+    /* Start initialization sequence */
     outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
     io_wait();
     outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
     io_wait();
 
-    /* Set vector offsets (ICW2) */
+    /* Set vector offsets */
     outb(PIC1_DATA, offset1);
     io_wait();
     outb(PIC2_DATA, offset2);
     io_wait();
 
-    /* Tell master PIC there's a slave at IRQ2 (ICW3) */
     outb(PIC1_DATA, 4);
     io_wait();
-
-    /* Tell slave PIC its cascade identity (ICW3) */
     outb(PIC2_DATA, 2);
     io_wait();
-
-    /* Set 8086/88 mode (ICW4) */
     outb(PIC1_DATA, ICW4_8086);
     io_wait();
     outb(PIC2_DATA, ICW4_8086);
     io_wait();
-
-    /* * Mask all interrupts (0xFF) on both PICs to prevent spurious IRQs.
-     * We will explicitly unmask specific IRQs (like timer) later in kernel_main.
-     */
     outb(PIC1_DATA, 0xFF);
     outb(PIC2_DATA, 0xFF);
 }
 
 void pic_send_eoi(uint8_t irq)
 {
-    /* If IRQ came from slave PIC, send EOI to both */
     if (irq >= 8)
     {
         outb(PIC2_COMMAND, PIC_EOI);
     }
-    /* Always send EOI to master */
     outb(PIC1_COMMAND, PIC_EOI);
 }
 

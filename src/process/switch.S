@@ -1,17 +1,9 @@
 # process_switch.S - Low-level context switching for URIX
 # Licensed under MIT License - URIX project.
-#
-#  - Support for NULL old_context (first run or exiting process)
-#  - User space (ring 3) support
-#  - Correct stack frame handling
-#  - Proper segment register restoration
-#
-# This works with the improved process.c scheduler
 
 .section .text
 .code64
 
-#
 # process_context_switch - Switch between process contexts
 #
 # Arguments:
@@ -25,16 +17,6 @@
 # When old_context is valid (normal switch):
 #   - Save current CPU state to old_context
 #   - Restore CPU state from new_context
-#
-# cpu_context_t structure offsets (must match process.h):
-#   0x00: r15       0x40: rbp      0x78: rip
-#   0x08: r14       0x48: rdi      0x80: cs
-#   0x10: r13       0x50: rsi      0x88: rflags
-#   0x18: r12       0x58: rdx      0x90: rsp
-#   0x20: r11       0x60: rcx      0x98: ss
-#   0x28: r10       0x68: rbx
-#   0x30: r9        0x70: rax
-#   0x38: r8
 
 .global process_context_switch
 .type process_context_switch, @function
@@ -64,12 +46,12 @@ process_context_switch:
     movq %rbx, 0x68(%rdi)
     movq %rax, 0x70(%rdi)
     
-    # Save instruction pointer (return address on stack)
+    # Save instruction pointer
     movq (%rsp), %rax         # Get return address
     movq %rax, 0x78(%rdi)     # Save as RIP
     
     # Save code segment
-    movq $0x08, %rax          # Kernel CS
+    movq $0x08, %rax
     movq %rax, 0x80(%rdi)
     
     # Save RFLAGS
@@ -77,32 +59,23 @@ process_context_switch:
     popq %rax
     movq %rax, 0x88(%rdi)
     
-    # Save stack pointer (before call, so RSP + 8 to skip return address)
-    leaq 8(%rsp), %rax        # RSP before call instruction
+    # Save stack pointer
+    leaq 8(%rsp), %rax
     movq %rax, 0x90(%rdi)
     
     # Save stack segment
-    movq $0x10, %rax          # Kernel DS
+    movq $0x10, %rax
     movq %rax, 0x98(%rdi)
     
 restore_new_context:
-    # RSI points to new_context
-    
-    # We need to check if this is a kernel or user mode process
-    # by looking at the CS register in the context
     movq 0x80(%rsi), %rax     # Get CS from new context
-    andq $3, %rax             # Check RPL (last 2 bits)
-    cmpq $3, %rax             # Is it ring 3?
-    je restore_user_mode      # Yes, use iretq path
+    andq $3, %rax
+    cmpq $3, %rax
+    je restore_user_mode
     
 restore_kernel_mode:
-    # Simple restore for ring 0 processes
-    
-    # Check if this is the very first context switch (from kernel_main)
-    # by checking if we have a return address on stack
-    # If old_context was NULL, we jumped here with no return address
-    cmpq $0, %rdi                 # Was old_context NULL?
-    jne normal_kernel_restore     # No, do normal restore with ret
+    cmpq $0, %rdi
+    jne normal_kernel_restore
     
 first_process_jump:
     # First process
@@ -137,7 +110,7 @@ first_process_jump:
     # Restore RSI last
     movq 0x50(%rsi), %rsi
     
-    # Jump to entry point (not return)
+    # Jump to entry point
     jmp *%r11
     
 normal_kernel_restore:
@@ -173,20 +146,13 @@ normal_kernel_restore:
     # Restore RSI last
     movq 0x50(%rsi), %rsi
     
-    # Return to new process (pops RIP and jumps)
+    # Return to new process
     ret
     
 restore_user_mode:
-    # Must use iretq to switch privilege levels
-    # iretq expects stack frame: SS, RSP, RFLAGS, CS, RIP
-    
-    # Build iretq frame on current (kernel) stack
-    # Switch to a temporary kernel stack to build frame
-    
-    # Get new kernel RSP
     movq 0x90(%rsi), %rsp
     
-    # Build iretq stack frame (pushed in reverse order)
+    # Build iretq stack frame
     pushq 0x98(%rsi)          # SS (user data segment)
     pushq 0x90(%rsi)          # RSP (user stack pointer)
     pushq 0x88(%rsi)          # RFLAGS
@@ -211,12 +177,4 @@ restore_user_mode:
     
     # Restore RSI last
     movq 0x50(%rsi), %rsi
-    
-    # Execute iretq:
-    #  1. Pop RIP
-    #  2. Pop CS (and switch to ring 3 if RPL=3)
-    #  3. Pop RFLAGS
-    #  4. Pop RSP
-    #  5. Pop SS
-    #  6. Resume execution in new privilege level
     iretq
