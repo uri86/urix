@@ -81,6 +81,22 @@ void vmm_finish_init(void);
  */
 address_space_t *vmm_create_address_space(void);
 
+/*
+ * vmm_clone_user_space - Copy all user-space pages from src to dst
+ *
+ * Walks the source PML4 lower half (indices 0-255), and for every
+ * present 4KB page it finds:
+ *   1. Allocates a new physical frame
+ *   2. Copies the page data
+ *   3. Maps it into dst with the same flags
+ *
+ * src: Source address space (parent)
+ * dst: Destination address space (child) - must already exist
+ *
+ * Returns: 0 on success, -1 on failure
+ */
+int vmm_clone_user_space(address_space_t *src, address_space_t *dst);
+
 /**
  * vmm_destroy_address_space - Destroy an address space
  *

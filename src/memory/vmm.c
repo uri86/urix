@@ -244,6 +244,75 @@ address_space_t *vmm_create_address_space(void)
     return as;
 }
 
+int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
+{
+    if (!src || !dst)
+        return -1;
+
+    uint64_t *src_pml4 = src->pml4_virt;
+
+    for (int i4 = 0; i4 < 256; i4++)
+    {
+        if (!(src_pml4[i4] & VMM_PRESENT))
+            continue;
+
+        uint64_t *src_pdpt = (uint64_t *)phys_to_virt(pte_to_phys(src_pml4[i4]));
+
+        for (int i3 = 0; i3 < 512; i3++)
+        {
+            if (!(src_pdpt[i3] & VMM_PRESENT))
+                continue;
+
+            uint64_t *src_pd = (uint64_t *)phys_to_virt(pte_to_phys(src_pdpt[i3]));
+
+            for (int i2 = 0; i2 < 512; i2++)
+            {
+                if (!(src_pd[i2] & VMM_PRESENT))
+                    continue;
+
+                uint64_t *src_pt = (uint64_t *)phys_to_virt(pte_to_phys(src_pd[i2]));
+
+                for (int i1 = 0; i1 < 512; i1++)
+                {
+                    if (!(src_pt[i1] & VMM_PRESENT))
+                        continue;
+
+                    /* Found a mapped page */
+                    uint64_t src_phys = pte_to_phys(src_pt[i1]);
+                    uint64_t flags = src_pt[i1] & 0xFFF; /* preserve all flag bits */
+
+                    /* Reconstruct the virtual address from the indices */
+                    uint64_t virt = ((uint64_t)i4 << 39) |
+                                    ((uint64_t)i3 << 30) |
+                                    ((uint64_t)i2 << 21) |
+                                    ((uint64_t)i1 << 12);
+
+                    /* Allocate a new frame for the child */
+                    uint64_t dst_phys = pmm_alloc_frame();
+                    if (!dst_phys)
+                    {
+                        debug_kprintf("vmm_clone_user_space: OOM at virt %llx\n", virt);
+                        return -1;
+                    }
+
+                    /* Copy the page data */
+                    memcpy(phys_to_virt(dst_phys), phys_to_virt(src_phys), PAGE_SIZE);
+
+                    /* Map into child with same flags */
+                    if (vmm_map_page(dst, virt, dst_phys, flags) != 0)
+                    {
+                        debug_kprintf("vmm_clone_user_space: map failed at virt %llx\n", virt);
+                        pmm_free_frame(dst_phys);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
 void vmm_destroy_address_space(address_space_t *as)
 {
     if (!as || as == &kernel_space)

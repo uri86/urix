@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <memory/vmm.h>
+#include <process/fd_table.h>
 
 /* Time slice for scheduling */
 #define TIME_SLICE 10
@@ -57,8 +58,11 @@ typedef struct cpu_context
 typedef struct process
 {
     uint32_t pid;
+    uint32_t parent_pid;
     char name[32];
 
+    int exit_status;
+    int is_zombie;
     /* State of the proceess for context switching and priority scheduling */
     process_state_t state;
     process_priority_t priority;
@@ -71,6 +75,7 @@ typedef struct process
     uint64_t kernel_stack_phys;
     uint64_t kernel_stack_virt;
     uint64_t user_stack;
+    fd_table_t *fd_table; // file table
 
     /* Scheduling info for priority scheduling and to prevent starvation */
     uint32_t time_slice_remaining;
@@ -108,8 +113,17 @@ void process_init(void);
  *
  * Returns: PID on success, -1 on failure
  */
-int process_create(uint64_t entry_point, const char *name,
-                   process_priority_t priority, process_privilege_t privilege);
+int process_create(uint64_t entry_point, const char *name, process_priority_t priority, process_privilege_t privilege);
+
+/**
+ * process_fork - Create a copy of the current process
+ * 
+ * Returns:
+ *   Parent: Child's PID
+ *   Child:  0
+ *   Error:  -1
+ */
+int process_fork(void);
 
 /**
  * process_exit - Terminate current process
@@ -120,6 +134,18 @@ int process_create(uint64_t entry_point, const char *name,
  * cleanup.
  */
 void process_exit(int exit_code) __attribute__((noreturn));
+
+/**
+ * process_wait - Wait for a child process to exit
+ * 
+ * Blocks the calling process until one of its children exits.
+ * Returns the child's PID and stores exit status.
+ * 
+ * status: Pointer to store child's exit status (can be NULL)
+ * 
+ * Returns: Child's PID on success, -1 if no children
+ */
+int process_wait(int *status);
 
 /**
  * process_yield - Voluntarily yield CPU to next process

@@ -4,6 +4,7 @@
  */
 
 #include <process/process.h>
+#include <process/fd_table.h>
 #include <memory/vmm.h>
 #include <memory/kmalloc.h>
 #include <memory/physical/pmm.h>
@@ -121,6 +122,10 @@ int process_create(uint64_t entry_point, const char *name,
 
     /* Setup identity */
     proc->pid = next_pid++;
+    process_t *current = process_get_current();
+    proc->parent_pid = current ? current->pid : 0;
+    proc->exit_status = 0;
+    proc->is_zombie = 0;
     strncpy(proc->name, name, 31);
     proc->priority = priority;
     proc->effective_priority = priority;
@@ -149,6 +154,15 @@ int process_create(uint64_t entry_point, const char *name,
     proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
     vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
                  proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
+
+    proc->fd_table = fd_table_create();
+    if (!proc->fd_table)
+    {
+        vmm_destroy_address_space(proc->addr_space);
+        pmm_free_frame(proc->kernel_stack_phys);
+        kfree(proc);
+        return -1;
+    }
 
     /* Setup context */
     memset(&proc->context, 0, sizeof(cpu_context_t));
@@ -197,21 +211,274 @@ int process_create(uint64_t entry_point, const char *name,
     return proc->pid;
 }
 
+int process_fork(void)
+{
+    process_t *parent = process_get_current();
+    if (!parent)
+    {
+        debug_kprintf("no parent process to fork!\n");
+        return -1;
+    }
+    debug_kprintf("cloning process. name: %s, pid: %d\n", parent->name, parent->pid);
+
+    /* create a new process info table */
+    process_t *child = (process_t *)kmalloc(sizeof(process_t));
+    if (!child)
+    {
+        debug_kprintf("failed to allocate child process table\n");
+        return -1;
+    }
+    memcpy(child, parent, sizeof(process_t));
+    child->pid = next_pid++;
+    child->parent_pid = parent->pid;
+    child->exit_status = 0;
+    child->is_zombie = 0;
+
+    char name_buf[32];
+    strncpy(name_buf, parent->name, 32);
+    strncpy(child->name, name_buf, 32);
+
+    /* reset process state */
+    child->state = PROCESS_STATE_READY;
+    child->time_slice_remaining = TIME_SLICE;
+    child->total_runtime = 0;
+    child->wait_time = 0;
+    child->next_in_queue = NULL;
+    child->next_all = NULL;
+
+    child->addr_space = vmm_create_address_space();
+    if (!child->addr_space)
+    {
+        debug_kprintf("failed to create address space for child PID %d\n", child->pid);
+        kfree(child);
+        return -1;
+    }
+    if (vmm_clone_user_space(parent->addr_space, child->addr_space) != 0)
+    {
+        debug_kprintf("fork: failed to clone user address space from parent PID %d\n", parent->pid);
+        vmm_destroy_address_space(child->addr_space);
+        kfree(child);
+        return -1;
+    }
+
+    /* allocate kernel stack */
+    child->kernel_stack_phys = pmm_alloc_frame();
+    if (!child->kernel_stack_phys)
+    {
+        debug_kprintf("fork: failed to allocate kernel stack for child PID %d\n", child->pid);
+        vmm_destroy_address_space(child->addr_space);
+        kfree(child);
+        return -1;
+    }
+
+    child->kernel_stack_virt = KERNEL_VIRT_BASE + child->kernel_stack_phys;
+    vmm_map_page(child->addr_space, child->kernel_stack_virt,
+                 child->kernel_stack_phys, VMM_KERNEL_FLAGS);
+
+    /* copy kernel stack contents */
+    memcpy((void *)child->kernel_stack_virt, (void *)parent->kernel_stack_virt, PAGE_SIZE);
+
+    /* copy context */
+    memcpy((void *)&child->context, (void *)&parent->context, sizeof(cpu_context_t));
+
+    /* calculate the offset of rsp inside the parent stack and apply it to the child */
+    uintptr_t stack_offset = (uintptr_t)parent->context.rsp - (uintptr_t)parent->kernel_stack_virt;
+    child->context.rsp = (uintptr_t)child->kernel_stack_virt + stack_offset;
+    uintptr_t base_offset = (uintptr_t)parent->context.rbp - (uintptr_t)parent->kernel_stack_virt;
+    child->context.rbp = (uintptr_t)child->kernel_stack_virt + base_offset;
+
+    /* child process returns 0 from fork */
+    child->context.rax = 0;
+
+    /* copy the file descriptor table */
+    if (parent->fd_table)
+    {
+        child->fd_table = fd_table_create();
+        if (!child->fd_table)
+        {
+            debug_kprintf("fork: failed to create FD table for child PID %d\n", child->pid);
+            pmm_free_frame(child->kernel_stack_phys);
+            vmm_destroy_address_space(child->addr_space);
+            kfree(child);
+            return -1;
+        }
+
+        for (int i = 0; i < MAX_FDS; i++)
+        {
+            /* copy the entry struct first */
+            child->fd_table->fds[i] = parent->fd_table->fds[i];
+            fd_entry_t *child_fd = &child->fd_table->fds[i];
+
+            switch (child_fd->type)
+            {
+            case FD_TYPE_FILE:
+                if (child_fd->vfs_file)
+                {
+                    vfs_retain_file(child_fd->vfs_file);
+                }
+                break;
+
+            case FD_TYPE_PIPE:
+                if (child_fd->pipe)
+                {
+                    // pipes, later on.
+                }
+                break;
+
+            case FD_TYPE_CONSOLE:
+                break;
+
+            default:
+                break;
+            }
+        }
+    }
+    /* add back to queue */
+    enqueue(child);
+    child->next_all = all_processes;
+    all_processes = child;
+    total_processes++;
+    child->parent_pid = parent->pid;
+
+    debug_kprintf("fork: successfully created child PID %u from parent PID %u\n",
+                  child->pid, parent->pid);
+
+    /* return child's PID to parent */
+    return child->pid;
+}
+
 void process_exit(int exit_code)
 {
-    if (!current_process)
+    process_t *proc = process_get_current();
+    if (!proc)
     {
         PANIC("process_exit: no current process");
     }
 
-    debug_kprintf("Process '%s' (PID %u) exiting with code %d\n",
-                  current_process->name, current_process->pid, exit_code);
+    debug_kprintf("Process '%s' (PID %u) exiting with code %d\n", proc->name, proc->pid, exit_code);
 
-    current_process->state = PROCESS_STATE_TERMINATED;
+    /* Store exit status */
+    proc->exit_status = exit_code;
+
+    /* Check if we have a living parent */
+    process_t *parent = NULL;
+    if (proc->parent_pid != 0)
+    {
+        parent = process_get(proc->parent_pid);
+    }
+
+    if (parent)
+    {
+        debug_kprintf("Process %u becoming zombie (parent %u)\n", proc->pid, proc->parent_pid);
+
+        proc->is_zombie = 1;
+        proc->state = PROCESS_STATE_TERMINATED;
+
+        /* Wake up parent if it's blocked */
+        if (parent->state == PROCESS_STATE_BLOCKED)
+        {
+            debug_kprintf("Waking up parent %u from wait()\n", proc->parent_pid);
+            parent->state = PROCESS_STATE_READY;
+            enqueue(parent);
+        }
+    }
+    else
+    {
+        debug_kprintf("Process %u has no parent, will be cleaned by scheduler\n", proc->pid);
+        proc->is_zombie = 0;
+        proc->state = PROCESS_STATE_TERMINATED;
+    }
 
     process_schedule();
 
     PANIC("Returned from schedule in process_exit");
+}
+
+int process_wait(int *status)
+{
+    process_t *parent = process_get_current();
+    if (!parent)
+        return -1;
+    
+    debug_kprintf("wait: PID %u waiting for children\n", parent->pid);
+    
+    /* Loop until a zombie child is found/find that a process doesn't have children */
+    while (1)
+    {
+        int has_children = 0;
+        process_t *zombie_child = NULL;
+        
+        /* Scan all processes for the child */
+        process_t *p = all_processes;
+        while (p)
+        {
+            if (p->parent_pid == parent->pid)
+            {
+                has_children = 1;
+                
+                /* Found a zombie child */
+                if (p->is_zombie && p->state == PROCESS_STATE_TERMINATED)
+                {
+                    zombie_child = p;
+                    break;
+                }
+            }
+            p = p->next_all;
+        }
+        
+        /* Found a zombie child, clean up */
+        if (zombie_child)
+        {
+            debug_kprintf("wait: reaping zombie child PID %u (status %d)\n", zombie_child->pid, zombie_child->exit_status);
+            
+            uint32_t child_pid = zombie_child->pid;
+            int child_status = zombie_child->exit_status;
+            
+            /* Remove from all_processes list */
+            if (all_processes == zombie_child)
+            {
+                all_processes = zombie_child->next_all;
+            }
+            else
+            {
+                process_t *prev = all_processes;
+                while (prev && prev->next_all != zombie_child)
+                    prev = prev->next_all;
+                if (prev)
+                    prev->next_all = zombie_child->next_all;
+            }
+            
+            total_processes--;
+            
+            /* Free all resources */
+            if (zombie_child->fd_table)
+                fd_table_destroy(zombie_child->fd_table);
+            if (zombie_child->addr_space)
+                vmm_destroy_address_space(zombie_child->addr_space);
+            if (zombie_child->kernel_stack_phys)
+                pmm_free_frame(zombie_child->kernel_stack_phys);
+            
+            kfree(zombie_child);
+            
+            /* Return status to parent */
+            if (status)
+                *status = child_status;
+            
+            return child_pid;
+        }
+        
+        /* No children at all */
+        if (!has_children)
+        {
+            debug_kprintf("wait: PID %u has no children\n", parent->pid);
+            return -1;
+        }
+        
+        debug_kprintf("wait: PID %u blocking (children still running)\n", parent->pid);
+        
+        parent->state = PROCESS_STATE_BLOCKED;
+        process_yield();
+    }
 }
 
 void process_yield(void)
@@ -233,74 +500,106 @@ void process_schedule(void)
 
     if (old && old->state == PROCESS_STATE_TERMINATED)
     {
-        debug_kprintf("Cleaning up terminated process '%s' (PID %u)\n",
-                      old->name, old->pid);
-
-        if (all_processes == old)
+        /* Check if this process is a zombie or not */
+        if (old->is_zombie)
         {
-            all_processes = old->next_all;
+            debug_kprintf("Process %u is zombie (parent %u will reap it)\n", old->pid, old->parent_pid);
         }
         else
         {
-            process_t *p = all_processes;
-            while (p && p->next_all != old)
-                p = p->next_all;
-            if (p)
-                p->next_all = old->next_all;
+            debug_kprintf("Cleaning up terminated process '%s' (PID %u)\n", old->name, old->pid);
+
+            if (all_processes == old)
+            {
+                all_processes = old->next_all;
+            }
+            else
+            {
+                process_t *p = all_processes;
+                while (p && p->next_all != old)
+                    p = p->next_all;
+                if (p)
+                    p->next_all = old->next_all;
+            }
+
+            total_processes--;
+
+            address_space_t *old_space = old->addr_space;
+            uint64_t old_stack = old->kernel_stack_phys;
+            fd_table_t *old_fdt = old->fd_table;
+            process_t *old_proc = old;
+
+            process_t *new = dequeue_highest_priority();
+            if (!new)
+            {
+                PANIC("No runnable process after termination!");
+            }
+
+            new->state = PROCESS_STATE_RUNNING;
+            new->time_slice_remaining = TIME_SLICE;
+            new->wait_time = 0;
+            new->effective_priority = new->priority;
+
+            current_process = new;
+            context_switches++;
+
+            vmm_switch_address_space(new->addr_space);
+
+            if (old_fdt)
+                fd_table_destroy(old_fdt);
+            if (old_space)
+                vmm_destroy_address_space(old_space);
+            if (old_stack)
+                pmm_free_frame(old_stack);
+
+            kfree(old_proc);
+
+            process_context_switch(NULL, &new->context);
+
+            PANIC("Returned from context switch after cleanup");
         }
-
-        total_processes--;
-
-        address_space_t *old_space = old->addr_space;
-        uint64_t old_stack = old->kernel_stack_phys;
-        process_t *old_proc = old;
-
-        process_t *new = dequeue_highest_priority();
-        if (!new)
-        {
-            PANIC("No runnable process after termination!");
-        }
-
-        new->state = PROCESS_STATE_RUNNING;
-        new->time_slice_remaining = TIME_SLICE;
-        new->wait_time = 0;
-        new->effective_priority = new->priority;
-
-        current_process = new;
-        context_switches++;
-
-        vmm_switch_address_space(new->addr_space);
-
-        if (old_space)
-            vmm_destroy_address_space(old_space);
-        if (old_stack)
-            pmm_free_frame(old_stack);
-
-        kfree(old_proc);
-
-        process_context_switch(NULL, &new->context);
-
-        PANIC("Returned from context switch after cleanup");
     }
 
     process_t *new = dequeue_highest_priority();
 
     if (!new)
     {
-        kprintf("WARNING: No ready process!\n");
         if (old && old->state == PROCESS_STATE_RUNNING)
         {
-            /* Keep running current */
-            enqueue(old);
             return;
         }
-        PANIC("No runnable process!");
+
+        if (old && old->state == PROCESS_STATE_BLOCKED)
+        {
+            debug_kprintf("WARNING: All processes blocked or terminated!\n");
+
+            process_t *p = all_processes;
+            while (p)
+            {
+                if (p->state == PROCESS_STATE_READY)
+                {
+                    new = p;
+                    break;
+                }
+                if (p->state == PROCESS_STATE_BLOCKED)
+                {
+                    debug_kprintf("Process %u (%s) is blocked\n", p->pid, p->name);
+                }
+                p = p->next_all;
+            }
+
+            if (!new)
+                PANIC("All processes blocked or terminated");
+        }
+        else
+        {
+            PANIC("No runnable process!");
+        }
     }
 
     /* Continues if the same process was chosen again */
     if (new == old && old && old->state == PROCESS_STATE_RUNNING)
     {
-        // enqueue(new);
         return;
     }
 
@@ -311,10 +610,10 @@ void process_schedule(void)
         enqueue(old);
     }
 
+    /* Update new process state */
     new->state = PROCESS_STATE_RUNNING;
     new->time_slice_remaining = TIME_SLICE;
-    new->wait_time = 0; /* Reset wait time when it runs */
-
+    new->wait_time = 0;
     new->effective_priority = new->priority;
 
     current_process = new;
@@ -324,7 +623,7 @@ void process_schedule(void)
     vmm_switch_address_space(new->addr_space);
 
     /* Context switch */
-    if (old && old->state != PROCESS_STATE_TERMINATED)
+    if (old && old->state != PROCESS_STATE_TERMINATED && !old->is_zombie)
     {
         process_context_switch(&old->context, &new->context);
     }
