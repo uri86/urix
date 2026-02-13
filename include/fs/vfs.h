@@ -110,6 +110,7 @@ mount_t *vfs_get_root(void);
 
 /* File Operations */
 int vfs_open(const char *path, uint32_t flags, file_t **out);
+void vfs_retain_file(file_t *f);
 void vfs_close(file_t *f);
 int vfs_read(file_t *f, void *buf, size_t size);
 int vfs_write(file_t *f, const void *buf, size_t size);

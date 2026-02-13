@@ -625,6 +625,8 @@ static int ext2_create(vnode_t *dir, const char *name, vnode_t **res)
     v->type = VFS_FILE;
     v->mount = dir->mount;
     v->ops = &ext2_ops;
+    v->size = 0;
+    v->refcount = 1;
     *res = v;
 
     debug_kprintf("Ext2: File created successfully (inode %u)\n", ino);
@@ -728,7 +730,9 @@ static int ext2_mkdir(vnode_t *dir, const char *name, vnode_t **res)
     v->inode = ino;
     v->type = VFS_DIR;
     v->mount = dir->mount;
+    v->size = m->block_size;
     v->ops = &ext2_ops;
+    v->refcount = 1;
     *res = v;
 
     debug_kprintf("Ext2: Directory created successfully (inode %u)\n", ino);
@@ -823,6 +827,11 @@ static int ext2_rmdir(vnode_t *dir, const char *name)
 
     // Check if directory is empty
     uint8_t *buf = kmalloc(m->block_size);
+    if (!buf)
+    {
+        kfree(target);
+        return -1;
+    }
     if (inode.i_block[0])
     {
         read_fs_block(m, inode.i_block[0], buf);
@@ -914,6 +923,12 @@ static int ext2_lookup(vnode_t *dir, const char *name, vnode_t **res)
                 strncmp(name, d->name, d->name_len) == 0)
             {
                 vnode_t *v = kmalloc(sizeof(vnode_t));
+                if (!v)
+                {
+                    kfree(buf);
+                    return -1;
+                }
+                
                 ext2_inode_t target;
                 ext2_read_inode(m, d->inode, &target);
 
@@ -924,8 +939,9 @@ static int ext2_lookup(vnode_t *dir, const char *name, vnode_t **res)
                 // Check if directory flag (0x4000) is set in mode
                 v->type = (target.i_mode & 0x4000) ? VFS_DIR : VFS_FILE;
                 v->size = target.i_size;
-                *res = v;
+                v->refcount = 1;
                 kfree(buf);
+                *res = v;
                 return 0;
             }
             off += d->rec_len;
@@ -1082,12 +1098,13 @@ static int ext2_mount(const char *devname, mount_t **mnt)
     (*mnt)->fs_data = m;
     (*mnt)->fs = &ext2_fs;
 
-    vnode_t *root = kmalloc(sizeof(vnode_t));
+   vnode_t *root = kmalloc(sizeof(vnode_t));
     memset(root, 0, sizeof(vnode_t));
     root->inode = 2; // Ext2 Root Inode is always 2
     root->type = VFS_DIR;
     root->mount = *mnt;
     root->ops = &ext2_ops;
+    root->refcount = 1;
     (*mnt)->root = root;
 
     return 0;

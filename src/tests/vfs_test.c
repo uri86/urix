@@ -169,9 +169,6 @@ void vfs_directory_tests(void)
     int result = vfs_mkdir("/mydir");
     TEST_ASSERT(result != 0, "duplicate directory creation fails");
 
-    /* Test 5: Create files in directories would require path parsing
-     * For now, we test that directories are properly created */
-
     TEST_END("vfs_directory_tests");
 }
 
@@ -249,6 +246,80 @@ void vfs_delete_tests(void)
     TEST_ASSERT(result != 0, "deleted directory no longer exists");
 
     TEST_END("vfs_delete_tests");
+}
+
+/**
+ * vfs_nested_directory_tests - Test nested directory support
+ */
+void vfs_nested_directory_tests(void)
+{
+    TEST_BEGIN("vfs_nested_directory_tests");
+
+    /* Create nested directory structure */
+    TEST_ASSERT(vfs_mkdir("/folder") == 0, "create /folder");
+    TEST_ASSERT(vfs_mkdir("/folder/subfolder") == 0, "create /folder/subfolder");
+    TEST_ASSERT(vfs_mkdir("/folder/subfolder/deepfolder") == 0, 
+                "create /folder/subfolder/deepfolder");
+
+    /* Create files in nested directories */
+    file_t *f = NULL;
+    
+    TEST_ASSERT(vfs_open("/folder/file1.txt", VFS_CREATE | VFS_WRITE, &f) == 0,
+                "create /folder/file1.txt");
+    vfs_write(f, "File in folder", 14);
+    vfs_close(f);
+
+    TEST_ASSERT(vfs_open("/folder/subfolder/file2.txt", VFS_CREATE | VFS_WRITE, &f) == 0,
+                "create /folder/subfolder/file2.txt");
+    vfs_write(f, "File in subfolder", 17);
+    vfs_close(f);
+
+    TEST_ASSERT(vfs_open("/folder/subfolder/deepfolder/file3.txt", VFS_CREATE | VFS_WRITE, &f) == 0,
+                "create /folder/subfolder/deepfolder/file3.txt");
+    vfs_write(f, "Deep file", 9);
+    vfs_close(f);
+
+    /* Read files from nested directories */
+    char buf[128];
+    
+    TEST_ASSERT(vfs_open("/folder/file1.txt", VFS_READ, &f) == 0,
+                "open /folder/file1.txt");
+    memset(buf, 0, sizeof(buf));
+    vfs_read(f, buf, sizeof(buf));
+    TEST_ASSERT(strcmp(buf, "File in folder") == 0, "read nested file content");
+    vfs_close(f);
+
+    TEST_ASSERT(vfs_open("/folder/subfolder/deepfolder/file3.txt", VFS_READ, &f) == 0,
+                "open deep nested file");
+    memset(buf, 0, sizeof(buf));
+    vfs_read(f, buf, sizeof(buf));
+    TEST_ASSERT(strcmp(buf, "Deep file") == 0, "read deep file content");
+    vfs_close(f);
+
+    /* Test deletion of nested files */
+    TEST_ASSERT(vfs_unlink("/folder/subfolder/deepfolder/file3.txt") == 0,
+                "delete deep nested file");
+    
+    int result = vfs_open("/folder/subfolder/deepfolder/file3.txt", VFS_READ, &f);
+    TEST_ASSERT(result != 0, "deleted deep file no longer exists");
+
+    /* Test deletion of nested directories */
+    TEST_ASSERT(vfs_rmdir("/folder/subfolder/deepfolder") == 0,
+                "remove empty deep directory");
+    
+    TEST_ASSERT(vfs_unlink("/folder/subfolder/file2.txt") == 0,
+                "delete file in subfolder");
+    
+    TEST_ASSERT(vfs_rmdir("/folder/subfolder") == 0,
+                "remove empty subfolder");
+
+    TEST_ASSERT(vfs_unlink("/folder/file1.txt") == 0,
+                "delete file in folder");
+    
+    TEST_ASSERT(vfs_rmdir("/folder") == 0,
+                "remove empty folder");
+
+    TEST_END("vfs_nested_directory_tests");
 }
 
 /**
@@ -412,6 +483,7 @@ void vfs_demo(void)
     vfs_file_tests();
     vfs_directory_tests();
     vfs_readdir_tests();
+    vfs_nested_directory_tests();
     vfs_delete_tests();
     vfs_persistence_test();
     vfs_stress_test();

@@ -8,7 +8,6 @@
 #include <lib/print.h>
 #include <memory/physical/pmm.h>
 
-
 size_t strlen(const char *str)
 {
     size_t len = 0;
@@ -16,7 +15,6 @@ size_t strlen(const char *str)
         len++;
     return len;
 }
-
 
 char *strcpy(char *dest, const char *src)
 {
@@ -30,6 +28,22 @@ char *strcpy(char *dest, const char *src)
     return ret;
 }
 
+char *strchr(const char *s, int c)
+{
+    while (1)
+    {
+        if (*s == (char)c)
+        {
+            return (char *)s;
+        }
+        if (*s == '\0')
+        {
+            return NULL;
+        }
+        s++;
+    }
+}
+
 void reverse(char *str, size_t len)
 {
     for (size_t i = 0; i < len / 2; i++)
@@ -39,7 +53,6 @@ void reverse(char *str, size_t len)
         str[len - 1 - i] = tmp;
     }
 }
-
 
 char *itoa(int64_t num, char *buffer, int base)
 {
@@ -80,7 +93,6 @@ char *itoa(int64_t num, char *buffer, int base)
 
     return buffer;
 }
-
 
 char *utoa(uint64_t num, char *buffer, int base)
 {
@@ -161,7 +173,6 @@ char *strncpy(char *dest, const char *src, size_t n)
     return dest;
 }
 
-
 void *memset(void *s, int c, size_t n)
 {
     uint8_t *ptr = (uint8_t *)s;
@@ -205,7 +216,6 @@ void *memset(void *s, int c, size_t n)
 
     return s;
 }
-
 
 void *memcpy(void *dest, const void *src, size_t n)
 {

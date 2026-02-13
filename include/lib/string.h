@@ -31,6 +31,17 @@ uint64_t strlen(const char *str);
 char *strcpy(char *dest, const char *src);
 
 /**
+ * strchr - Find the first appearance of a character in a string.
+ * 
+ * s: A null terminated string.
+ * c: Integer representation of a character
+ * 
+ * Returns a pointer to the first appearance of the character c in the string.
+ * If doesn't find the character, or the string is empty, returns NULL.
+ */
+char *strchr(const char *s, int c);
+
+/**
  * reverse - Reverse a string in place.
  *
  * str: Pointer to the string buffer.
