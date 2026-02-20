@@ -118,6 +118,11 @@ void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 for (char *p = tmp; *p && i < size - 1; p++)
                     buf[i++] = *p;
             }
+            else if (*fmt == 'c')
+            {
+                unsigned int value = va_arg(args, unsigned int);
+                buf[i++] = (char)value;
+            }
             else if (*fmt == 'l') // check for 'l' or 'll'
             {
                 if (*(fmt + 1) == 'l') // "ll" case
