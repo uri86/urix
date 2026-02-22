@@ -11,6 +11,8 @@
 #include <lib/print.h>
 #include <lib/string.h>
 #include <lib/panic.h>
+#include <fs/elf.h>
+#include <cpu/gdt.h>
 
 /* GDT segment selectors */
 #define KERNEL_CS 0x08
@@ -18,7 +20,9 @@
 #define USER_CS 0x1B
 #define USER_DS 0x23
 
+#ifndef USER_STACK_TOP
 #define USER_STACK_TOP 0x0000800000000000ULL
+#endif
 
 typedef struct ready_queue
 {
@@ -211,6 +215,147 @@ int process_create(uint64_t entry_point, const char *name,
     return proc->pid;
 }
 
+static int process_alloc_user_stack(address_space_t *addr_space)
+{
+    uint64_t stack_pages = USER_STACK_SIZE / PAGE_SIZE;
+
+    for (uint64_t i = 0; i < stack_pages; i++)
+    {
+        uint64_t vaddr = USER_STACK_BOTTOM + (i * PAGE_SIZE);
+        uint64_t phys = pmm_alloc_frame();
+
+        if (phys == 0)
+        {
+            debug_kprintf("[ERROR] process_alloc_user_stack: out of memory at page %lu\n", i);
+            return -1;
+        }
+
+        if (vmm_map_page(addr_space, vaddr, phys,
+                         VMM_USER | VMM_WRITE | VMM_PRESENT) != 0)
+        {
+            debug_kprintf("[ERROR] process_alloc_user_stack: vmm_map_page failed at %lx\n", vaddr);
+            pmm_free_frame(phys);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int process_load_elf(const char *name, const void *elf_data,
+                     size_t elf_size, process_priority_t priority)
+{
+    if (!elf_data || !elf_size || priority > PRIORITY_REALTIME)
+    {
+        debug_kprintf("[ERROR] process_load_elf: Invalid parameters\n");
+        return -1;
+    }
+
+    debug_kprintf("[DEBUG] process_load_elf: Loading '%s' (%lu bytes)\n",
+                  name, elf_size);
+
+    /* Allocate and zero the PCB */
+    process_t *proc = (process_t *)kmalloc(sizeof(process_t));
+    if (!proc)
+    {
+        kprintf("[ERROR] Failed to allocate PCB for '%s'\n", name);
+        return -1;
+    }
+    memset(proc, 0, sizeof(process_t));
+
+    /* Identity */
+    proc->pid = next_pid++;
+    process_t *current = process_get_current();
+    proc->parent_pid = current ? current->pid : 0;
+    proc->exit_status = 0;
+    proc->is_zombie = 0;
+    strncpy(proc->name, name, 31);
+    proc->priority = priority;
+    proc->effective_priority = priority;
+    proc->privilege = PROCESS_USER;
+    proc->state = PROCESS_STATE_READY;
+    proc->time_slice_remaining = TIME_SLICE;
+
+    /* Address space */
+    proc->addr_space = vmm_create_address_space();
+    if (!proc->addr_space)
+    {
+        kprintf("[ERROR] Failed to create address space for '%s'\n", name);
+        kfree(proc);
+        return -1;
+    }
+
+    /* Kernel stack */
+    proc->kernel_stack_phys = pmm_alloc_frame();
+    if (!proc->kernel_stack_phys)
+    {
+        kprintf("[ERROR] Failed to allocate kernel stack for '%s'\n", name);
+        vmm_destroy_address_space(proc->addr_space);
+        kfree(proc);
+        return -1;
+    }
+    proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
+    vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
+                 proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
+
+    /* File descriptor table */
+    proc->fd_table = fd_table_create();
+    if (!proc->fd_table)
+    {
+        kprintf("[ERROR] Failed to create FD table for '%s'\n", name);
+        vmm_destroy_address_space(proc->addr_space);
+        pmm_free_frame(proc->kernel_stack_phys);
+        kfree(proc);
+        return -1;
+    }
+
+    /* Load ELF into the new address space */
+    elf_info_t elf_info;
+    if (elf_load(elf_data, elf_size, proc->addr_space, &elf_info) != 0)
+    {
+        kprintf("[ERROR] elf_load failed for '%s'\n", name);
+        fd_table_destroy(proc->fd_table);
+        vmm_destroy_address_space(proc->addr_space);
+        pmm_free_frame(proc->kernel_stack_phys);
+        kfree(proc);
+        return -1;
+    }
+
+    /* Allocate user stack */
+    if (process_alloc_user_stack(proc->addr_space) != 0)
+    {
+        kprintf("[ERROR] Failed to allocate user stack for '%s'\n", name);
+        fd_table_destroy(proc->fd_table);
+        vmm_destroy_address_space(proc->addr_space);
+        pmm_free_frame(proc->kernel_stack_phys);
+        kfree(proc);
+        return -1;
+    }
+
+    /* Initial CPU context */
+    memset(&proc->context, 0, sizeof(cpu_context_t));
+    proc->context.rip = elf_info.entry_point;
+    proc->context.rsp = USER_STACK_TOP;
+    proc->context.rbp = USER_STACK_TOP;
+    proc->context.cs = USER_CS;
+    proc->context.ss = USER_DS;
+    proc->context.rflags = 0x202;
+    proc->context.rdi = 0; /* argc */
+    proc->context.rsi = 0; /* argv */
+    proc->user_stack = USER_STACK_TOP;
+
+    /* Register with scheduler and process list */
+    enqueue(proc);
+    proc->next_all = all_processes;
+    all_processes = proc;
+    total_processes++;
+
+    kprintf("[SUCCESS] Loaded '%s' (PID %u, entry=%lx)\n",
+            proc->name, proc->pid, elf_info.entry_point);
+
+    return proc->pid;
+}
+
 int process_fork(void)
 {
     process_t *parent = process_get_current();
@@ -271,24 +416,34 @@ int process_fork(void)
         return -1;
     }
 
-    child->kernel_stack_virt = KERNEL_VIRT_BASE + child->kernel_stack_phys;
-    vmm_map_page(child->addr_space, child->kernel_stack_virt,
-                 child->kernel_stack_phys, VMM_KERNEL_FLAGS);
+    child->kernel_stack_virt = (uint64_t)phys_to_virt(child->kernel_stack_phys);
+    vmm_map_page(vmm_get_kernel_space(), child->kernel_stack_virt, child->kernel_stack_phys, VMM_KERNEL_FLAGS);
 
-    /* copy kernel stack contents */
-    memcpy((void *)child->kernel_stack_virt, (void *)parent->kernel_stack_virt, PAGE_SIZE);
-
-    /* copy context */
-    memcpy((void *)&child->context, (void *)&parent->context, sizeof(cpu_context_t));
-
-    /* calculate the offset of rsp inside the parent stack and apply it to the child */
-    uintptr_t stack_offset = (uintptr_t)parent->context.rsp - (uintptr_t)parent->kernel_stack_virt;
-    child->context.rsp = (uintptr_t)child->kernel_stack_virt + stack_offset;
-    uintptr_t base_offset = (uintptr_t)parent->context.rbp - (uintptr_t)parent->kernel_stack_virt;
-    child->context.rbp = (uintptr_t)child->kernel_stack_virt + base_offset;
-
-    /* child process returns 0 from fork */
-    child->context.rax = 0;
+    extern uint64_t syscall_saved_user_rip;
+    extern uint64_t syscall_saved_user_rsp;
+    extern uint64_t syscall_saved_user_rflags;
+    extern uint64_t syscall_saved_user_cs;
+    extern uint64_t syscall_saved_user_ss;
+    child->context.rip = syscall_saved_user_rip;
+    child->context.rsp = syscall_saved_user_rsp;
+    child->context.rbp = parent->context.rbp;
+    child->context.rflags = syscall_saved_user_rflags | 0x200;
+    child->context.cs = 0x1B;
+    child->context.ss = 0x23;
+    child->context.rax = 0; // child gets 0 from fork
+    child->context.rbx = parent->context.rbx;
+    child->context.rcx = parent->context.rcx;
+    child->context.rdx = parent->context.rdx;
+    child->context.rsi = parent->context.rsi;
+    child->context.rdi = parent->context.rdi;
+    child->context.r8 = parent->context.r8;
+    child->context.r9 = parent->context.r9;
+    child->context.r10 = parent->context.r10;
+    child->context.r11 = parent->context.r11;
+    child->context.r12 = parent->context.r12;
+    child->context.r13 = parent->context.r13;
+    child->context.r14 = parent->context.r14;
+    child->context.r15 = parent->context.r15;
 
     /* copy the file descriptor table */
     if (parent->fd_table)
@@ -313,9 +468,7 @@ int process_fork(void)
             {
             case FD_TYPE_FILE:
                 if (child_fd->vfs_file)
-                {
                     vfs_retain_file(child_fd->vfs_file);
-                }
                 break;
 
             case FD_TYPE_PIPE:
@@ -333,7 +486,8 @@ int process_fork(void)
             }
         }
     }
-    /* add back to queue */
+
+    /* add to process list and queue */
     enqueue(child);
     child->next_all = all_processes;
     all_processes = child;
@@ -399,15 +553,15 @@ int process_wait(int *status)
     process_t *parent = process_get_current();
     if (!parent)
         return -1;
-    
+
     debug_kprintf("wait: PID %u waiting for children\n", parent->pid);
-    
+
     /* Loop until a zombie child is found/find that a process doesn't have children */
     while (1)
     {
         int has_children = 0;
         process_t *zombie_child = NULL;
-        
+
         /* Scan all processes for the child */
         process_t *p = all_processes;
         while (p)
@@ -415,7 +569,7 @@ int process_wait(int *status)
             if (p->parent_pid == parent->pid)
             {
                 has_children = 1;
-                
+
                 /* Found a zombie child */
                 if (p->is_zombie && p->state == PROCESS_STATE_TERMINATED)
                 {
@@ -425,15 +579,15 @@ int process_wait(int *status)
             }
             p = p->next_all;
         }
-        
+
         /* Found a zombie child, clean up */
         if (zombie_child)
         {
             debug_kprintf("wait: reaping zombie child PID %u (status %d)\n", zombie_child->pid, zombie_child->exit_status);
-            
+
             uint32_t child_pid = zombie_child->pid;
             int child_status = zombie_child->exit_status;
-            
+
             /* Remove from all_processes list */
             if (all_processes == zombie_child)
             {
@@ -447,9 +601,9 @@ int process_wait(int *status)
                 if (prev)
                     prev->next_all = zombie_child->next_all;
             }
-            
+
             total_processes--;
-            
+
             /* Free all resources */
             if (zombie_child->fd_table)
                 fd_table_destroy(zombie_child->fd_table);
@@ -457,25 +611,25 @@ int process_wait(int *status)
                 vmm_destroy_address_space(zombie_child->addr_space);
             if (zombie_child->kernel_stack_phys)
                 pmm_free_frame(zombie_child->kernel_stack_phys);
-            
+
             kfree(zombie_child);
-            
+
             /* Return status to parent */
             if (status)
                 *status = child_status;
-            
+
             return child_pid;
         }
-        
+
         /* No children at all */
         if (!has_children)
         {
             debug_kprintf("wait: PID %u has no children\n", parent->pid);
             return -1;
         }
-        
+
         debug_kprintf("wait: PID %u blocking (children still running)\n", parent->pid);
-        
+
         parent->state = PROCESS_STATE_BLOCKED;
         process_yield();
     }
@@ -544,7 +698,7 @@ void process_schedule(void)
             context_switches++;
 
             vmm_switch_address_space(new->addr_space);
-
+            gdt_set_kernel_stack(new->kernel_stack_virt + PAGE_SIZE);
             if (old_fdt)
                 fd_table_destroy(old_fdt);
             if (old_space)
@@ -621,7 +775,7 @@ void process_schedule(void)
 
     /* Switch address space */
     vmm_switch_address_space(new->addr_space);
-
+    gdt_set_kernel_stack(new->kernel_stack_virt + PAGE_SIZE);
     /* Context switch */
     if (old && old->state != PROCESS_STATE_TERMINATED && !old->is_zombie)
     {

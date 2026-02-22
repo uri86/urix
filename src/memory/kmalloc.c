@@ -12,16 +12,18 @@
 #include <stdint.h>
 
 #ifndef PAGE_SIZE
-    #define PAGE_SIZE 4096
+#define PAGE_SIZE 4096
 #endif /* PAGE_SIZE */
 #define KMALLOC_MAX_SLAB 2048
 #define KMALLOC_MIN_SLAB 16
 #define KMALLOC_CLASS_COUNT 8
+#define KMALLOC_CANARY 0xDEADBEEFCAFEBABEULL
 
 static const size_t slab_sizes[KMALLOC_CLASS_COUNT] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 
 typedef struct kmalloc_header
 {
+    uint64_t canary;
     uint16_t flags;
     uint16_t class;
     uint32_t pages;
@@ -63,16 +65,15 @@ static void *alloc_pages(size_t pages)
         uint64_t phys = pmm_alloc_frame();
         if (!phys)
             PANIC("kmalloc: out of physical memory");
-
+            
         uint64_t virt = (uint64_t)phys_to_virt(phys);
-
-        vmm_map_page(NULL, virt, phys, VMM_KERNEL_FLAGS);
-
+        
         if (i == 0)
             first_virt = virt;
     }
 
     kmalloc_header_t *hdr = (kmalloc_header_t *)first_virt;
+    hdr->canary = KMALLOC_CANARY;
     hdr->flags = KMALLOC_FLAG_PAGE;
     hdr->class = 0;
     hdr->pages = pages;
@@ -83,15 +84,12 @@ static void *alloc_pages(size_t pages)
 static void free_pages(void *ptr)
 {
     kmalloc_header_t *hdr = (kmalloc_header_t *)((uint8_t *)ptr - sizeof(kmalloc_header_t));
-
     uint64_t base = (uint64_t)hdr;
+    uint32_t pages = hdr->pages;
 
-    for (uint32_t i = 0; i < hdr->pages; i++)
-    {
+    for (uint32_t i = 0; i < pages; i++) {
         uint64_t virt = base + i * PAGE_SIZE;
-        uint64_t phys = vmm_unmap_page(NULL, virt);
-        if (phys)
-            pmm_free_frame(phys);
+        pmm_free_frame(virt_to_phys((void *)virt));
     }
 }
 
@@ -105,18 +103,16 @@ static void slab_refill(int class)
         PANIC("kmalloc: slab refill OOM");
 
     uint64_t virt = (uint64_t)phys_to_virt(phys);
-    vmm_map_page(NULL, virt, phys, VMM_KERNEL_FLAGS);
-
     size_t usable = PAGE_SIZE - sizeof(kmalloc_header_t);
     size_t count = usable / block;
 
     kmalloc_header_t *hdr = (kmalloc_header_t *)virt;
+    hdr->canary = KMALLOC_CANARY;
     hdr->flags = KMALLOC_FLAG_SLAB;
     hdr->class = class;
     hdr->pages = 1;
 
     uint8_t *data = (uint8_t *)virt + sizeof(kmalloc_header_t);
-
     for (size_t i = 0; i < count; i++)
     {
         free_block_t *blk = (free_block_t *)(data + i * block);
@@ -170,41 +166,38 @@ void kfree(void *ptr)
     if (!ptr)
         return;
 
-    /* Round DOWN to page base to find header */
+    kmalloc_header_t *hdr_before = (kmalloc_header_t *)((uint8_t *)ptr - sizeof(kmalloc_header_t));
+
+    if (hdr_before->flags & KMALLOC_FLAG_PAGE)
+    {
+        if (hdr_before->canary != KMALLOC_CANARY)
+        {
+            kprintf("[kfree CORRUPTION] page-alloc header at %llx has bad canary %llx (ptr=%llx)\n", (uint64_t)hdr_before, hdr_before->canary, (uint64_t)ptr);
+            PANIC("heap corruption detected in kfree");
+        }
+        free_pages(ptr);
+        return;
+    }
+
     uint64_t page_base = ((uint64_t)ptr) & ~((uint64_t)PAGE_SIZE - 1);
     kmalloc_header_t *hdr = (kmalloc_header_t *)page_base;
 
-    /* Validate header is at page boundary */
-    if (((uint64_t)hdr & (PAGE_SIZE - 1)) != 0)
+    if (hdr->canary != KMALLOC_CANARY)
     {
-        PANIC("kfree: header not at page boundary");
-    }
-
-    /* Check flags */
-    if (hdr->flags == 0 || (hdr->flags & ~(KMALLOC_FLAG_SLAB | KMALLOC_FLAG_PAGE)))
-    {
-        PANIC("kfree: invalid flags in header");
+        kprintf("[kfree CORRUPTION] slab header at %llx has bad canary %llx (ptr=%llx)\n", (uint64_t)hdr, hdr->canary, (uint64_t)ptr);
+        PANIC("heap corruption detected in kfree");
     }
 
     if (hdr->flags & KMALLOC_FLAG_SLAB)
     {
         if (hdr->class >= KMALLOC_CLASS_COUNT)
-        {
             PANIC("kfree: invalid slab class");
-        }
 
         slab_class_t *sc = &slab_classes[hdr->class];
         free_block_t *blk = (free_block_t *)ptr;
-
         blk->next = sc->free_list;
         sc->free_list = blk;
         sc->used_blocks--;
-        return;
-    }
-
-    if (hdr->flags & KMALLOC_FLAG_PAGE)
-    {
-        free_pages(ptr);
         return;
     }
 

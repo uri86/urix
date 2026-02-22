@@ -7,6 +7,7 @@
 #define STRING_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 /**
  * strlen - Return the length of a null-terminated string.

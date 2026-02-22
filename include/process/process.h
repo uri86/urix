@@ -116,6 +116,19 @@ void process_init(void);
 int process_create(uint64_t entry_point, const char *name, process_priority_t priority, process_privilege_t privilege);
 
 /**
+ * process_load_elf - Create a new userspace process from ELF data
+ *
+ * name: Process name (max 31 characters)
+ * elf_data: Pointer to ELF file data in memory
+ * elf_size: Size of ELF data in bytes
+ * priority: Base scheduling priority
+ *
+ * Creates a new userspace process, loads the ELF, sets up user stack, and adds to scheduler.
+ * Returns: PID on success, -1 on failure
+ */
+int process_load_elf(const char *name, const void *elf_data, size_t elf_size, process_priority_t priority);
+
+/**
  * process_fork - Create a copy of the current process
  * 
  * Returns:

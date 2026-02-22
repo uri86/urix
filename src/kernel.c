@@ -15,11 +15,15 @@
 #include <lib/panic.h>
 #include <fs/blockdev.h>
 #include <fs/vfs.h>
+#include <fs/elf.h>
 #include <fs/ext2.h>
 #include <fs/vfs_manager.h>
 #include <drivers/ata.h>
 #include <drivers/ramdisk.h>
 #include <drivers/keyboard.h>
+#include <syscall/syscall.h>
+
+#include <embedded_programs.h>
 
 void enable_sse(void)
 {
@@ -111,9 +115,117 @@ void keyboard_test_process(void)
     process_exit(0);
 }
 
+void load_userspace_binaries(void)
+{
+    kprintf("=== Loading Userspace Programs ===\n");
+
+    // Create /bin directory
+    kprintf("Creating /bin directory...\n");
+    int ret = vfs_mkdir("/bin");
+    if (ret != 0)
+    {
+        kprintf("  /bin might exist already (code %d)\n", ret);
+    }
+
+    // Write each embedded binary to VFS
+    for (int i = 0; i < embedded_binaries_count; i++)
+    {
+        const embedded_binary_t *bin = &embedded_binaries[i];
+        char path[64];
+        path[0] = '/';
+        path[1] = 'b';
+        path[2] = 'i';
+        path[3] = 'n';
+        path[4] = '/';
+        strcpy(&path[5], bin->name);
+
+        kprintf("Writing %s (%lu bytes)...\n", bin->name, bin->size);
+
+        // Open file for writing (create if doesn't exist)
+        file_t *file;
+        ret = vfs_open(path, VFS_CREATE | VFS_WRITE, &file);
+
+        if (ret == 0 && file)
+        {
+            // Write the binary data
+            int written = vfs_write(file, bin->data, bin->size);
+            vfs_close(file);
+
+            if (written == (int)bin->size)
+            {
+                kprintf("  OK: %d bytes\n", written);
+            }
+            else
+            {
+                kprintf("  ERROR: Only wrote %d/%lu bytes\n", written, bin->size);
+            }
+        }
+        else
+        {
+            kprintf("  ERROR: vfs_open failed (code %d)\n", ret);
+        }
+    }
+
+    kprintf("=== Userspace Programs Loaded ===\n");
+}
+
+void start_init_process(void)
+{
+    kprintf("=== Starting Init Process ===\n");
+
+    file_t *init_file;
+    int ret = vfs_open("/bin/init", VFS_READ, &init_file);
+
+    if (ret != 0 || !init_file)
+    {
+        kprintf("ERROR: Can't open /bin/shell (code %d)\n", ret);
+        return;
+    }
+
+    // Get size from vnode
+    size_t size = init_file->vnode->size;
+    kprintf("Init size: %lu bytes\n", size);
+
+    // Allocate buffer
+    uint8_t *data = (uint8_t *)kmalloc(size);
+    if (!data)
+    {
+        kprintf("ERROR: kmalloc failed\n");
+        vfs_close(init_file);
+        return;
+    }
+
+    // Read binary
+    int bytes = vfs_read(init_file, data, size);
+    vfs_close(init_file);
+
+    if (bytes != (int)size)
+    {
+        kprintf("ERROR: Read %d/%lu bytes\n", bytes, size);
+        kfree(data);
+        return;
+    }
+
+    int pid = process_load_elf("init", data, size, PRIORITY_NORMAL);
+
+    kprintf("DEBUG: about to kfree data=%lx size=%lu pid=%d\n",
+            (uint64_t)data, size, pid);
+    kfree(data);
+    kprintf("DEBUG: kfree done\n");
+
+    if (pid >= 0)
+    {
+        kprintf("init running with PID %d\n", pid);
+    }
+    else
+    {
+        kprintf("ERROR: process_load_elf failed (code %d)\n", pid);
+    }
+}
+
 void kernel_main(uint64_t mb_info_addr)
 {
-    uint8_t test_mode = 0;
+    uint8_t test_mode = 0, kernel_mode = 0;
     uint8_t *cmd = NULL;
     multiboot_size_tag *tag = (multiboot_size_tag *)(uintptr_t)mb_info_addr;
     multiboot_tag *t = (multiboot_tag *)((uint8_t *)mb_info_addr + 8);
@@ -134,7 +246,12 @@ void kernel_main(uint64_t mb_info_addr)
     {
         test_mode = 1;
         debug_mode = 1;
+        kernel_mode = 1;
         debug_delay_ms = 300;
+    }
+    else if (cmd && strcmp((char *)cmd, "kernel") == 0)
+    {
+        kernel_mode = 1;
     }
 
     clear_screen();
@@ -167,6 +284,7 @@ void kernel_main(uint64_t mb_info_addr)
     debug_kprintf("Reloading GDT/IDT to higher half...\n");
     gdt_update_for_higher_half();
     idt_update_for_higher_half();
+    syscall_init();
     debug_kprintf("Finished reloading of GDT/IDT...\n");
     vmm_finish_init();
 
@@ -215,10 +333,15 @@ void kernel_main(uint64_t mb_info_addr)
         if (process_create((uint64_t)test_suite_process, "test-suite", PRIORITY_HIGH, PROCESS_KERNEL) < 0)
             PANIC("Failed to create test-suite process");
     }
+    else if (!kernel_mode)
+    {
+        load_userspace_binaries();
+        start_init_process();
+        clear_screen();
+    }
     else
     {
-        /* Default mode - keyboard test */
-        kprintf("\n=== Starting Keyboard Test ===\n\n");
+        kprintf("\n=== Starting Kernel Mode ===\n\n");
         if (process_create((uint64_t)keyboard_test_process, "kbd-test", PRIORITY_NORMAL, PROCESS_KERNEL) < 0)
             PANIC("Failed to create keyboard test process");
     }

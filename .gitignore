@@ -3,6 +3,8 @@ build
 iso
 *.iso
 *.o
+bin
+embedded_programs.*
 
 # macOS
 .DS_Store

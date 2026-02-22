@@ -21,7 +21,9 @@
 
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL /* Start of higher-half */
 #define USER_VIRT_BASE 0x0000000000400000ULL   /* 4MB - standard ELF load address */
-#define USER_STACK_TOP 0x0000800000000000ULL
+#define USER_STACK_TOP 0x00007FFFFFFFE000ULL
+#define USER_STACK_SIZE (8ULL * 1024 * 1024)
+#define USER_STACK_BOTTOM (USER_STACK_TOP - USER_STACK_SIZE)
 #define KERNEL_STACK_SIZE (16384ULL)
 
 /* Page table entry flags */
@@ -147,6 +149,19 @@ int vmm_map_page(address_space_t *as, uint64_t virt_addr,
  * Returns the physical address that was mapped, or 0 if not mapped.
  */
 uint64_t vmm_unmap_page(address_space_t *as, uint64_t virt_addr);
+
+/**
+ * vmm_map_kernel_page - Map a physical frame into kernel heap, visible in all address spaces.
+ *
+ * Maps into both the kernel PML4 and the currently active CR3 if they differ.
+ * Use this for all kernel heap allocations to ensure mappings survive context switches.
+ */
+void vmm_map_kernel_page(uint64_t virt, uint64_t phys);
+
+/**
+ * vmm_unmap_kernel_page - Unmap a kernel heap page and free the physical frame.
+ */
+void vmm_unmap_kernel_page(uint64_t virt);
 
 /**
  * vmm_get_physical - Get physical address for a virtual address

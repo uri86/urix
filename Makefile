@@ -1,61 +1,74 @@
-# Makefile for URIX kernel
+# URIX Root Makefile
 include rules.mk
 
-# Directories
-LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process src/fs
+LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process src/fs src/syscall
 
-# Library object names (the .o they produce)
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
 
-# Source files
 ASM_SOURCES = $(SRCDIR)/boot.S
-C_SOURCES   = $(SRCDIR)/kernel.c
+C_SOURCES   = $(SRCDIR)/kernel.c $(SRCDIR)/embedded_programs.c
 
-# Object files
 ASM_OBJECTS = $(ASM_SOURCES:$(SRCDIR)/%.S=$(BUILDDIR)/%.o)
 C_OBJECTS   = $(C_SOURCES:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 OBJECTS     = $(ASM_OBJECTS) $(C_OBJECTS) $(LIB_OBJS)
 
-# Target kernel
 KERNEL = $(BUILDDIR)/kernel.bin
-
-# ISO
 ISO = urix.iso
 
-.PHONY: all clean iso run run-qemu rerun rerun-y $(LIBS)
 
-# Default target
+USERSPACE_DIR = userspace
+USERSPACE_BUILD = $(USERSPACE_DIR)/build
+
+EMBEDDED_C = $(SRCDIR)/embedded_programs.c
+EMBEDDED_H = include/embedded_programs.h
+
+.PHONY: all clean iso run $(LIBS) userspace
+
 all: $(KERNEL)
 
-# Build libraries
+$(USERSPACE_BINS):
+	$(MAKE) -C $(USERSPACE_DIR)
+
+userspace:
+	$(MAKE) -C $(USERSPACE_DIR)
+
+$(EMBEDDED_C) $(EMBEDDED_H): userspace
+	cd $(USERSPACE_DIR) && ./gen_embedded.sh
+	cp $(USERSPACE_DIR)/embedded_programs.c $(SRCDIR)/
+	cp $(USERSPACE_DIR)/embedded_programs.h include/
+
 $(LIB_OBJS):
 	@for lib in $(LIBS); do \
 		$(MAKE) -C $$lib CFLAGS="$(CFLAGS)"; \
 		cp $$lib/build/lib.o $(BUILDDIR)/$$(basename $$lib).o; \
 	done
 
-# Build directory
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
-# Compile ASM
 $(BUILDDIR)/%.o: $(SRCDIR)/%.S | $(BUILDDIR)
 	$(AS) $(ASFLAGS) -o $@ $<
 
-# Compile C
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(KERNEL): $(OBJECTS)
+# Ensure embedded gets generated first
+$(BUILDDIR)/embedded_programs.o: $(EMBEDDED_C)
+
+$(KERNEL): $(EMBEDDED_C) $(OBJECTS)
 	$(LD) -nostdlib -static -T linker.ld -o $@ $(OBJECTS)
 
+
 iso: $(KERNEL)
+	@echo "[URIX] Building ISO..."
 	mkdir -p $(ISODIR)/boot/grub
 	cp $(KERNEL) $(ISODIR)/boot/kernel.bin
 	cp grub.cfg $(ISODIR)/boot/grub/grub.cfg
 	i686-elf-grub-mkrescue -o $(ISO) $(ISODIR)
 
-run-qemu:
+
+run: iso
+	@echo "[URIX] Launching QEMU..."
 	qemu-system-x86_64 \
 		-m size=4096M \
 		-d int \
@@ -64,26 +77,9 @@ run-qemu:
 		-drive file=disk.img,format=raw,if=ide,index=0 \
 		-cdrom $(ISO)
 
-run: iso
-	$(MAKE) run-qemu
-
-rerun:
-	@if [ "$(REBUILD)" = "1" ]; then \
-		$(MAKE) clean run; \
-	else \
-		printf "Recompile before running? [y/N]: "; \
-		read ans; \
-		if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
-			$(MAKE) clean run; \
-		else \
-			$(MAKE) run-qemu; \
-		fi; \
-	fi
-
-# Forced rebuild rerun
-rerun-y:
-	$(MAKE) rerun REBUILD=1
 
 clean:
-	rm -rf $(BUILDDIR) $(ISO) $(ISODIR)
+	rm -rf $(BUILDDIR) $(ISO)
 	for lib in $(LIBS); do $(MAKE) -C $$lib clean; done
+	$(MAKE) -C $(USERSPACE_DIR) clean
+	rm -rf **/embedded_programs.*

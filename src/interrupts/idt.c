@@ -204,9 +204,13 @@ struct interrupt_frame
 
 void irq_handler(struct interrupt_frame *frame)
 {
+
     /* Calculate actual IRQ number (subtract 32 to get 0-15) */
     uint8_t irq = frame->int_no - 32;
 
+    /* Send EOI to PIC */
+    pic_send_eoi(irq);
+    
     /* Handle specific IRQs */
     if (irq == 0)
     {
@@ -218,9 +222,6 @@ void irq_handler(struct interrupt_frame *frame)
         /* Keyboard interrupt */
         keyboard_interrupt_handler();
     }
-
-    /* Send EOI to PIC */
-    pic_send_eoi(irq);
 }
 
 // Common exception handler called from assembly stubs
