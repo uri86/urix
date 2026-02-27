@@ -980,9 +980,9 @@ void process_print_table(void)
     kprintf("Total: %u processes, %llu context switches\n\n", total_processes, context_switches);
 
     // Explicitly aligned column headers
-    kprintf("%-4s %-4s %-4s %-6s %-4s %-16s %-8s %-6s\n",
-            "PID", "Pri", "Eff", "State", "Ring", "Name", "Runtime", "Wait");
-    kprintf("---- ---- ---- ------ ---- ---------------- -------- ------\n");
+    kprintf("%-4s %-4s %-4s %-6s %-4s %-16s %-8s %-6s %-11s\n",
+            "PID", "Pri", "Eff", "State", "Ring", "Name", "Runtime", "Wait", "parent PID");
+    kprintf("---- ---- ---- ------ ---- ---------------- -------- ------ -----------\n");
 
     const char *state_names[] = {"READY", "RUN ", "BLOCK", "TERM "};
     const char *pri_names[] = {"IDLE", "LOW ", "NORM", "HIGH", "RT "};
@@ -990,7 +990,7 @@ void process_print_table(void)
     process_t *p = all_processes;
     while (p)
     {
-        kprintf("%-4u %-4s %-4s %-6s %-4u %-16s %-8llu %-6llu\n",
+        kprintf("%-4u %-4s %-4s %-6s %-4u %-16s %-8llu %-6llu %-11u\n",
                 p->pid,
                 pri_names[p->priority],
                 pri_names[p->effective_priority],
@@ -998,7 +998,7 @@ void process_print_table(void)
                 p->privilege,
                 p->name,
                 p->total_runtime,
-                p->wait_time);
+                p->wait_time, p->parent_pid);
         p = p->next_all;
     }
 
