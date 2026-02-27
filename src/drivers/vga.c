@@ -39,7 +39,8 @@ void console_initialize(void)
 {
     console_row = 0;
     console_column = 0;
-    console_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    if (!console_color)
+        console_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
 
     for (size_t y = 0; y < VGA_HEIGHT; y++)
     {
