@@ -11,7 +11,7 @@
 #ifndef SYSCALL_H
 #define SYSCALL_H
 
-/* System call numbers */
+/* system call numbers */
 #define SYS_EXIT 0
 #define SYS_READ 1
 #define SYS_WRITE 2
@@ -44,6 +44,9 @@
 #define SYS_GETS 29
 #define SYS_PUTS 30
 #define SYS_KPS 31
+#define SYS_TERMINAL_COLOR 32
+#define SYS_CLEAR_SCREEN 33
+#define SYS_READDIR 34
 
 /* info screen print types */
 #define KPPMM 1
@@ -51,7 +54,15 @@
 #define KPLG 3
 #define KPPPT 4
 
-/* System call interface using int $0x80 */
+/* open flags */
+#define O_RDONLY 0x0000
+#define O_WRONLY 0x0001
+#define O_RDWR 0x0002
+#define O_CREAT 0x0040
+#define O_EXCL 0x0080
+#define O_TRUNC 0x0200
+#define O_APPEND 0x0400
+
 static inline long syscall0(long n)
 {
     long ret;

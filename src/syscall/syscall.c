@@ -19,7 +19,95 @@
 #include <lib/logo.h>
 #include <memory/kmalloc.h>
 
+#define EXEC_MAX_ARGS 16
+#define EXEC_MAX_ARG_LEN 256
+
 extern void syscall_entry(void);
+
+static int resolve_path(const char *path, char *out_path)
+{
+    process_t *current = process_get_current();
+    if (!path || !out_path)
+        return -EINVAL;
+
+    char temp[512];
+    if (path[0] == '/')
+    {
+        strncpy(temp, path, 511);
+    }
+    else
+    {
+        strncpy(temp, current->cwd, 511);
+        size_t len = strlen(temp);
+        if (len > 0 && temp[len - 1] != '/')
+        {
+            if (len < 511)
+            {
+                temp[len] = '/';
+                temp[len + 1] = '\0';
+            }
+        }
+        size_t remain = 511 - strlen(temp);
+        strncpy(temp + strlen(temp), path, remain);
+    }
+    temp[511] = '\0';
+
+    /* Normalize path (handle '.' and '..') */
+    char *tokens[64];
+    int count = 0;
+
+    char *p = temp;
+    while (*p)
+    {
+        while (*p == '/')
+            p++; /* Skip redundant slashes */
+        if (*p == '\0')
+            break;
+
+        char *start = p;
+        while (*p && *p != '/')
+            p++;
+
+        if (*p)
+        {
+            *p = '\0';
+            p++;
+        }
+
+        if (strcmp(start, ".") == 0)
+        {
+            continue; /* Ignore '.' */
+        }
+        else if (strcmp(start, "..") == 0)
+        {
+            if (count > 0)
+                count--; /* Go back one directory */
+        }
+        else
+        {
+            if (count < 64)
+            {
+                tokens[count++] = start;
+            }
+        }
+    }
+
+    /* Reconstruct the absolute normalized path */
+    out_path[0] = '\0';
+    if (count == 0)
+    {
+        strcpy(out_path, "/");
+    }
+    else
+    {
+        for (int i = 0; i < count; i++)
+        {
+            strcat(out_path, "/");
+            strcat(out_path, tokens[i]);
+        }
+    }
+    return 0;
+}
 
 static long sys_exit(int status)
 {
@@ -122,14 +210,15 @@ static long sys_open(const char *path, int flags)
     if (!current || !current->fd_table)
         return -EBADF;
 
-    // allocate a file descriptor
+    char abs_path[512];
+    if (resolve_path(path, abs_path) != 0)
+        return -EINVAL;
+
     int fd = fd_table_alloc(current->fd_table);
     if (fd < 0)
-        return -EMFILE; // too many files, think over your life choices again.
+        return -EMFILE;
 
-    // convert the syscall flags into vfs flags
     uint32_t vfs_flags = 0;
-
     if (flags & O_RDONLY)
         vfs_flags |= VFS_READ;
     if (flags & O_WRONLY)
@@ -143,24 +232,20 @@ static long sys_open(const char *path, int flags)
     if (flags & O_APPEND)
         vfs_flags |= VFS_APPEND;
 
-    // open the file through VFS
     file_t *file = NULL;
-    int ret = vfs_open(path, vfs_flags, &file);
+    int ret = vfs_open(abs_path, vfs_flags, &file);
     if (ret != 0 || !file)
     {
-        fd_table_free(current->fd_table, fd);
         return ret;
     }
 
-    // set up the file descriptor entry
-    fd_entry_t *entry = fd_table_get(current->fd_table, fd);
+    fd_entry_t *entry = &current->fd_table->fds[fd];
     entry->type = FD_TYPE_FILE;
     entry->flags = flags;
     entry->vfs_file = file;
 
     return fd;
 }
-
 static long sys_close(int fd)
 {
     process_t *current = process_get_current();
@@ -235,13 +320,41 @@ static long sys_exec(const char *path, char *const argv[])
     if (!current)
         return -ESRCH;
 
-    /* copy path into kernel memory */
+    /* copy path */
     char kpath[256];
-    strncpy(kpath, path, sizeof(kpath) - 1);
-    kpath[sizeof(kpath) - 1] = '\0';
+    if (resolve_path(path, kpath) != 0)
+        return -EINVAL;
+    debug_kprintf("exec: '%s'\n", kpath);
 
-    debug_kprintf("exec: Loading '%s' for PID %u\n", kpath, current->pid);
+    const char *basename = kpath;
+    for (int i = 0; kpath[i] != '\0'; i++)
+    {
+        if (kpath[i] == '/')
+        {
+            basename = &kpath[i + 1];
+        }
+    }
 
+    if (*basename == '\0')
+    {
+        basename = "unknown";
+    }
+
+    strncpy(current->name, basename, sizeof(current->name) - 1);
+    current->name[sizeof(current->name) - 1] = '\0';
+
+    /* copy argv strings into kernel memory */
+    int argc = 0;
+    char kargs[EXEC_MAX_ARGS][EXEC_MAX_ARG_LEN];
+    if (argv)
+        while (argc < EXEC_MAX_ARGS && argv[argc])
+        {
+            strncpy(kargs[argc], argv[argc], EXEC_MAX_ARG_LEN - 1);
+            kargs[argc][EXEC_MAX_ARG_LEN - 1] = '\0';
+            argc++;
+        }
+
+    /* load ELF */
     address_space_t *new_as = vmm_create_address_space();
     if (!new_as)
         return -ENOMEM;
@@ -253,20 +366,18 @@ static long sys_exec(const char *path, char *const argv[])
         return -ENOEXEC;
     }
 
-    uint64_t stack_pages = USER_STACK_SIZE / PAGE_SIZE;
-    for (uint64_t i = 0; i < stack_pages; i++)
+    /* map user stack */
+    for (uint64_t i = 0; i < USER_STACK_SIZE / PAGE_SIZE; i++)
     {
-        uint64_t vaddr = USER_STACK_BOTTOM + (i * PAGE_SIZE);
+        uint64_t vaddr = USER_STACK_BOTTOM + i * PAGE_SIZE;
         uint64_t phys = pmm_alloc_frame();
-        if (phys == 0)
+        if (!phys)
         {
             vmm_destroy_address_space(new_as);
             return -ENOMEM;
         }
-
         memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
-
-        if (vmm_map_page(new_as, vaddr, phys, VMM_USER | VMM_WRITE | VMM_PRESENT) != 0)
+        if (vmm_map_page(new_as, vaddr, phys, VMM_USER | VMM_WRITE | VMM_PRESENT))
         {
             pmm_free_frame(phys);
             vmm_destroy_address_space(new_as);
@@ -274,49 +385,64 @@ static long sys_exec(const char *path, char *const argv[])
         }
     }
 
-    int argc = 0;
-    if (argv)
-        while (argv[argc] != NULL)
-            argc++;
-
+    /* switch address space */
     address_space_t *old_as = current->addr_space;
     current->addr_space = new_as;
     current->user_stack = USER_STACK_TOP;
 
-    vmm_switch_address_space(new_as); // Load new CR3
+    vmm_switch_address_space(new_as);
     gdt_set_kernel_stack(current->kernel_stack_virt + PAGE_SIZE);
-
     if (old_as)
-    {
         vmm_destroy_address_space(old_as);
+
+    uint64_t sp = USER_STACK_TOP;
+    uint64_t str_ptrs[EXEC_MAX_ARGS];
+
+    /* push string data top-down */
+    for (int i = argc - 1; i >= 0; i--)
+    {
+        size_t slen = strlen(kargs[i]) + 1;
+        sp -= slen;
+        sp &= ~7ULL; /* 8-byte align */
+
+        /* directly copy into the user stack */
+        memcpy((void *)sp, kargs[i], slen);
+        str_ptrs[i] = sp;
     }
 
+    /* align to 16 bytes */
+    sp &= ~15ULL;
+
+    /* push NULL (argv[argc] = NULL) */
+    sp -= 8;
+    *(uint64_t *)sp = 0;
+
+    /* push argv pointers */
+    for (int i = argc - 1; i >= 0; i--)
+    {
+        sp -= 8;
+        *(uint64_t *)sp = str_ptrs[i];
+    }
+
+    /* push argc */
+    sp -= 8;
+    *(uint64_t *)sp = (uint64_t)argc;
+
+    /* rewrite iretq frame */
     uint64_t *frame = (uint64_t *)trap_frame_ptr;
     frame[0] = elf_info.entry_point; /* RIP */
-    frame[1] = 0x1B;                 /* CS */
+    frame[1] = 0x1B;                 /* CS  */
     frame[2] = 0x202;                /* RFLAGS */
-    frame[3] = USER_STACK_TOP;       /* RSP */
-    frame[4] = 0x23;                 /* SS */
+    frame[3] = sp;                   /* RSP, points at argc */
+    frame[4] = 0x23;                 /* SS   */
 
+    /* zero all the general purpose registers */
     uint64_t *regs = (uint64_t *)(trap_frame_ptr - 120);
-    regs[0] = 0;    /* rax */
-    regs[1] = 0;    /* rbx */
-    regs[2] = 0;    /* rcx */
-    regs[3] = 0;    /* rdx */
-    regs[4] = 0;    /* rsi */
-    regs[5] = argc; /* rdi, argc */
-    regs[6] = 0;    /* rbp */
-    regs[7] = 0;    /* r8 */
-    regs[8] = 0;    /* r9 */
-    regs[9] = 0;    /* r10 */
-    regs[10] = 0;   /* r11 */
-    regs[11] = 0;   /* r12 */
-    regs[12] = 0;   /* r13 */
-    regs[13] = 0;   /* r14 */
-    regs[14] = 0;   /* r15 */
+    for (int i = 0; i < 15; i++)
+        regs[i] = 0;
 
-    debug_kprintf("exec: '%s' ready, entry=%lx stack=%lx\n", kpath, elf_info.entry_point, USER_STACK_TOP);
-
+    debug_kprintf("exec: ready — entry=%lx sp=%lx argc=%d\n",
+                  elf_info.entry_point, sp, argc);
     return 0;
 }
 
@@ -334,17 +460,26 @@ static long sys_kill(uint32_t pid, int sig)
 static long sys_mkdir(const char *path, uint32_t mode)
 {
     (void)mode;
-    return vfs_mkdir(path);
+    char abs_path[512];
+    if (resolve_path(path, abs_path) != 0)
+        return -EINVAL;
+    return vfs_mkdir(abs_path);
 }
 
 static long sys_rmdir(const char *path)
 {
-    return vfs_rmdir(path);
+    char abs_path[512];
+    if (resolve_path(path, abs_path) != 0)
+        return -EINVAL;
+    return vfs_rmdir(abs_path);
 }
 
 static long sys_unlink(const char *path)
 {
-    return vfs_unlink(path);
+    char abs_path[512];
+    if (resolve_path(path, abs_path) != 0)
+        return -EINVAL;
+    return vfs_unlink(abs_path);
 }
 
 static long sys_kernel_print(int flag)
@@ -377,6 +512,88 @@ static long sys_kernel_print(int flag)
     return 0;
 }
 
+static long sys_change_terminal_color(vga_color_t fg, vga_color_t bg)
+{
+    set_color(fg, bg);
+    return 0;
+}
+
+static long sys_clear_screen()
+{
+    clear_screen();
+    return 0;
+}
+
+static long sys_readdir(int fd, dirent_t *user_entry)
+{
+    process_t *current = process_get_current();
+    if (!current || !current->fd_table)
+        return -EBADF;
+
+    fd_entry_t *entry = fd_table_get(current->fd_table, fd);
+    if (!entry || entry->type != FD_TYPE_FILE || !entry->vfs_file)
+        return -EBADF;
+
+    if (!user_entry)
+        return -EINVAL;
+
+    /* Use vfs_readdir — it advances the file's internal offset */
+    dirent_t kentry;
+    int ret = vfs_readdir(entry->vfs_file, &kentry);
+    if (ret != 0)
+        return -1; /* no more entries */
+
+    /* Copy result to userspace */
+    memcpy(user_entry, &kentry, sizeof(dirent_t));
+    return 0;
+}
+
+static long sys_getcwd(char *buf, size_t size)
+{
+    if (!buf || size == 0)
+        return -EINVAL;
+
+    process_t *current = process_get_current();
+    if (!current)
+        return -ESRCH;
+
+    size_t len = strlen(current->cwd);
+    if (len + 1 > size)
+        return -EINVAL; /* buffer too small */
+    strncpy(buf, current->cwd, size);
+    buf[0] = '/';
+    return (long)(len + 1);
+}
+
+static long sys_chdir(const char *path)
+{
+    if (!path)
+        return -EINVAL;
+    process_t *current = process_get_current();
+    if (!current)
+        return -ESRCH;
+
+    char abs_path[512];
+    if (resolve_path(path, abs_path) != 0)
+        return -EINVAL;
+
+    file_t *f = NULL;
+    int ret = vfs_open(abs_path, VFS_READ, &f);
+    if (ret != 0 || !f)
+        return -ENOENT;
+
+    if (f->vnode->type != VFS_DIR)
+    {
+        vfs_close(f);
+        return -ENOTDIR;
+    }
+    vfs_close(f);
+
+    strncpy(current->cwd, abs_path, sizeof(current->cwd) - 1);
+    current->cwd[sizeof(current->cwd) - 1] = '\0';
+    return 0;
+}
+
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
 
 static syscall_fn_t syscall_table[SYS_MAX] = {
@@ -399,6 +616,11 @@ static syscall_fn_t syscall_table[SYS_MAX] = {
     [SYS_GETS] = (syscall_fn_t)sys_gets,
     [SYS_PUTS] = (syscall_fn_t)sys_puts,
     [SYS_KPS] = (syscall_fn_t)sys_kernel_print,
+    [SYS_TERMINAL_COLOR] = (syscall_fn_t)sys_change_terminal_color,
+    [SYS_CLEAR_SCREEN] = (syscall_fn_t)sys_clear_screen,
+    [SYS_CHDIR] = (syscall_fn_t)sys_chdir,
+    [SYS_GETCWD] = (syscall_fn_t)sys_getcwd,
+    [SYS_READDIR] = (syscall_fn_t)sys_readdir,
 };
 
 void syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)

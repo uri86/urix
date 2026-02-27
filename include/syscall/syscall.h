@@ -43,7 +43,10 @@
 #define SYS_GETS 29
 #define SYS_PUTS 30
 #define SYS_KPS 31
-#define SYS_MAX 32
+#define SYS_TERMINAL_COLOR 32
+#define SYS_CLEAR_SCREEN 33
+#define SYS_READDIR 34
+#define SYS_MAX 35
 
 /* file descriptor constants */
 #define STDIN_FILENO 0

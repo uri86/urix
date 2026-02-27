@@ -69,7 +69,8 @@ typedef struct process
     process_priority_t effective_priority;
     process_privilege_t privilege;
     cpu_context_t context;
-
+    char cwd[512];
+    
     /* Memory information, includes everything needed for a process to run */
     address_space_t *addr_space;
     uint64_t kernel_stack_phys;

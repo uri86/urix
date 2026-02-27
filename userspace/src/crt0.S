@@ -8,8 +8,15 @@ _start:
     # Clear frame pointer
     xor %rbp, %rbp
     
-    # rdi=argc, rsi=argv is set by the kernel
-    # calling process main
+    # argc is on top of the stack
+    pop %rdi
+    
+    # RSP points to the argv array
+    mov %rsp, %rsi
+    # align the stack 16 bytes
+    and $-16, %rsp
+    
+    # call main
     call main
     
     # exit with main's return value

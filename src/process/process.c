@@ -123,6 +123,7 @@ int process_create(uint64_t entry_point, const char *name,
     }
 
     memset(proc, 0, sizeof(process_t));
+    strcpy(proc->cwd, "/");
 
     /* Setup identity */
     proc->pid = next_pid++;
@@ -334,14 +335,32 @@ int process_load_elf(const char *name, const void *elf_data,
 
     /* Initial CPU context */
     memset(&proc->context, 0, sizeof(cpu_context_t));
+    uint64_t null_slot_virt = USER_STACK_TOP - 8;
+    uint64_t argc_slot_virt = USER_STACK_TOP - 16;
+
+    uint64_t null_phys = vmm_get_physical(proc->addr_space, null_slot_virt);
+    uint64_t argc_phys = vmm_get_physical(proc->addr_space, argc_slot_virt);
+
+    if (null_phys && argc_phys)
+    {
+        uint64_t null_off = null_slot_virt & (PAGE_SIZE - 1);
+        uint64_t argc_off = argc_slot_virt & (PAGE_SIZE - 1);
+        *(uint64_t *)((uint8_t *)phys_to_virt(null_phys) + null_off) = 0ULL;
+        *(uint64_t *)((uint8_t *)phys_to_virt(argc_phys) + argc_off) = 0ULL;
+    }
+    else
+    {
+        kprintf("[WARN] process_load_elf: could not map stack top for argv\n");
+    }
+
     proc->context.rip = elf_info.entry_point;
-    proc->context.rsp = USER_STACK_TOP;
-    proc->context.rbp = USER_STACK_TOP;
+    proc->context.rsp = USER_STACK_TOP - 16; /* points at argc slot */
+    proc->context.rbp = USER_STACK_TOP - 16;
     proc->context.cs = USER_CS;
     proc->context.ss = USER_DS;
     proc->context.rflags = 0x202;
-    proc->context.rdi = 0; /* argc */
-    proc->context.rsi = 0; /* argv */
+    proc->context.rdi = 0;
+    proc->context.rsi = 0;
     proc->user_stack = USER_STACK_TOP;
 
     /* Register with scheduler and process list */
@@ -364,6 +383,11 @@ int process_fork(void)
         debug_kprintf("no parent process to fork!\n");
         return -1;
     }
+
+    extern uint64_t syscall_frame_rsp;
+    uint64_t trap_frame_ptr = syscall_frame_rsp;
+    uint64_t *regs = (uint64_t *)(trap_frame_ptr - 120);
+
     debug_kprintf("cloning process. name: %s, pid: %d\n", parent->name, parent->pid);
 
     /* create a new process info table */
@@ -374,6 +398,7 @@ int process_fork(void)
         return -1;
     }
     memcpy(child, parent, sizeof(process_t));
+    strncpy(child->cwd, parent->cwd, sizeof(child->cwd));
     child->pid = next_pid++;
     child->parent_pid = parent->pid;
     child->exit_status = 0;
@@ -422,8 +447,6 @@ int process_fork(void)
     extern uint64_t syscall_saved_user_rip;
     extern uint64_t syscall_saved_user_rsp;
     extern uint64_t syscall_saved_user_rflags;
-    extern uint64_t syscall_saved_user_cs;
-    extern uint64_t syscall_saved_user_ss;
     child->context.rip = syscall_saved_user_rip;
     child->context.rsp = syscall_saved_user_rsp;
     child->context.rbp = parent->context.rbp;
@@ -431,19 +454,20 @@ int process_fork(void)
     child->context.cs = 0x1B;
     child->context.ss = 0x23;
     child->context.rax = 0; // child gets 0 from fork
-    child->context.rbx = parent->context.rbx;
-    child->context.rcx = parent->context.rcx;
-    child->context.rdx = parent->context.rdx;
-    child->context.rsi = parent->context.rsi;
-    child->context.rdi = parent->context.rdi;
-    child->context.r8 = parent->context.r8;
-    child->context.r9 = parent->context.r9;
-    child->context.r10 = parent->context.r10;
-    child->context.r11 = parent->context.r11;
-    child->context.r12 = parent->context.r12;
-    child->context.r13 = parent->context.r13;
-    child->context.r14 = parent->context.r14;
-    child->context.r15 = parent->context.r15;
+    child->context.rbx = regs[1];
+    child->context.rcx = regs[2];
+    child->context.rdx = regs[3];
+    child->context.rsi = regs[4];
+    child->context.rdi = regs[5];
+    child->context.rbp = regs[6];
+    child->context.r8 = regs[7];
+    child->context.r9 = regs[8];
+    child->context.r10 = regs[9];
+    child->context.r11 = regs[10];
+    child->context.r12 = regs[11];
+    child->context.r13 = regs[12];
+    child->context.r14 = regs[13];
+    child->context.r15 = regs[14];
 
     /* copy the file descriptor table */
     if (parent->fd_table)
@@ -953,19 +977,20 @@ void process_timer_tick(void)
 void process_print_table(void)
 {
     kprintf("\n=== Process Table ===\n");
-    kprintf("Total: %u processes, %llu context switches\n\n",
-            total_processes, context_switches);
+    kprintf("Total: %u processes, %llu context switches\n\n", total_processes, context_switches);
 
-    kprintf("PID  Pri   Eff   State   Ring  Name              Runtime  Wait\n");
-    kprintf("---  ----  ----  ------  ----  ----------------  -------  ----\n");
+    // Explicitly aligned column headers
+    kprintf("%-4s %-4s %-4s %-6s %-4s %-16s %-8s %-6s\n",
+            "PID", "Pri", "Eff", "State", "Ring", "Name", "Runtime", "Wait");
+    kprintf("---- ---- ---- ------ ---- ---------------- -------- ------\n");
 
-    const char *state_names[] = {"READY", "RUN   ", "BLOCK", "TERM  "};
-    const char *pri_names[] = {"IDLE", "LOW ", "NORM", "HIGH", "RT  "};
+    const char *state_names[] = {"READY", "RUN ", "BLOCK", "TERM "};
+    const char *pri_names[] = {"IDLE", "LOW ", "NORM", "HIGH", "RT "};
 
     process_t *p = all_processes;
     while (p)
     {
-        kprintf("%u  %s %s %s   %u   %s  %llu  %llu\n",
+        kprintf("%-4u %-4s %-4s %-6s %-4u %-16s %-8llu %-6llu\n",
                 p->pid,
                 pri_names[p->priority],
                 pri_names[p->effective_priority],

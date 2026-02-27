@@ -210,7 +210,7 @@ void kmalloc_print_stats(void)
     for (int i = 0; i < KMALLOC_CLASS_COUNT; i++)
     {
         slab_class_t *sc = &slab_classes[i];
-        kprintf("  %4luB: used %lu / total %lu\n",
+        kprintf("  %06luB: used %lu / total %lu\n",
                 sc->block_size,
                 sc->used_blocks,
                 sc->total_blocks);

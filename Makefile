@@ -22,7 +22,7 @@ USERSPACE_BUILD = $(USERSPACE_DIR)/build
 EMBEDDED_C = $(SRCDIR)/embedded_programs.c
 EMBEDDED_H = include/embedded_programs.h
 
-.PHONY: all clean iso run $(LIBS) userspace
+.PHONY: all clean iso run $(LIBS) userspace qemu
 
 all: $(KERNEL)
 
@@ -66,8 +66,7 @@ iso: $(KERNEL)
 	cp grub.cfg $(ISODIR)/boot/grub/grub.cfg
 	i686-elf-grub-mkrescue -o $(ISO) $(ISODIR)
 
-
-run: iso
+qemu:
 	@echo "[URIX] Launching QEMU..."
 	qemu-system-x86_64 \
 		-m size=4096M \
@@ -76,6 +75,8 @@ run: iso
 		-no-shutdown \
 		-drive file=disk.img,format=raw,if=ide,index=0 \
 		-cdrom $(ISO)
+
+run: iso qemu
 
 
 clean:

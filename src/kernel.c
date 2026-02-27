@@ -86,7 +86,7 @@ void keyboard_test_process(void)
         else if (strcmp(buffer, "state") == 0)
         {
             uint16_t state = keyboard_get_state();
-            kprintf("Keyboard state: 0x%x\n", state);
+            kprintf("Keyboard state: %x\n", state);
             kprintf("  Shift: %s\n", (state & KB_SHIFT) ? "ON" : "OFF");
             kprintf("  Ctrl:  %s\n", (state & KB_CTRL) ? "ON" : "OFF");
             kprintf("  Alt:   %s\n", (state & KB_ALT) ? "ON" : "OFF");

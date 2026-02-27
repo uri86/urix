@@ -16,11 +16,9 @@ int main(void)
         putchar('0' + ((pid / 10) % 10));
     putchar('0' + (pid % 10));
     putchar('\n');
-    int status;
     while (1)
     {
         int pid = fork();
-        // int status;
         if (pid > 0)
         {
             wait(NULL);
