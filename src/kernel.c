@@ -1,3 +1,7 @@
+/**
+ * Licensed under MIT License - URIX project
+ * kernel.c - Holds the main kernel entry after initial boot
+ */
 #include <stdint.h>
 #include <stddef.h>
 #include <lib/print.h>

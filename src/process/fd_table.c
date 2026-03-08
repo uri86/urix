@@ -13,24 +13,24 @@ fd_table_t *fd_table_create(void)
     fd_table_t *table = kmalloc(sizeof(fd_table_t));
     if (!table)
         return NULL;
-    
+
     memset(table, 0, sizeof(fd_table_t));
-    
+
     // standard IO
     table->fds[0].type = FD_TYPE_CONSOLE;
     table->fds[0].flags = O_RDONLY;
     table->fds[0].console_type = 0;
-    
+
     table->fds[1].type = FD_TYPE_CONSOLE;
     table->fds[1].flags = O_WRONLY;
     table->fds[1].console_type = 1;
-    
+
     table->fds[2].type = FD_TYPE_CONSOLE;
     table->fds[2].flags = O_WRONLY;
     table->fds[2].console_type = 2;
-    
+
     table->next_fd = 3;
-    
+
     return table;
 }
 
@@ -38,7 +38,7 @@ void fd_table_destroy(fd_table_t *table)
 {
     if (!table)
         return;
-    
+
     for (int i = 0; i < MAX_FDS; i++)
     {
         if (table->fds[i].type != FD_TYPE_NONE)
@@ -46,7 +46,7 @@ void fd_table_destroy(fd_table_t *table)
             fd_table_free(table, i);
         }
     }
-    
+
     kfree(table);
 }
 
@@ -54,7 +54,7 @@ int fd_table_alloc(fd_table_t *table)
 {
     if (!table)
         return -1;
-    
+
     for (int i = table->next_fd; i < MAX_FDS; i++)
     {
         if (table->fds[i].type == FD_TYPE_NONE)
@@ -63,7 +63,7 @@ int fd_table_alloc(fd_table_t *table)
             return i;
         }
     }
-    
+
     // if the first loop fails, tries again from the start
     for (int i = 0; i < table->next_fd; i++)
     {
@@ -72,7 +72,7 @@ int fd_table_alloc(fd_table_t *table)
             return i;
         }
     }
-    
+
     return -1; // returns on failure
 }
 
@@ -80,10 +80,10 @@ fd_entry_t *fd_table_get(fd_table_t *table, int fd)
 {
     if (!table || fd < 0 || fd >= MAX_FDS)
         return NULL;
-    
+
     if (table->fds[fd].type == FD_TYPE_NONE)
         return NULL;
-    
+
     return &table->fds[fd];
 }
 
@@ -91,27 +91,27 @@ void fd_table_free(fd_table_t *table, int fd)
 {
     if (!table || fd < 0 || fd >= MAX_FDS)
         return;
-    
+
     fd_entry_t *entry = &table->fds[fd];
-    
+
     switch (entry->type)
     {
     case FD_TYPE_FILE:
         if (entry->vfs_file)
             vfs_close(entry->vfs_file);
         break;
-        
+
     case FD_TYPE_CONSOLE:
         break;
-        
+
     case FD_TYPE_PIPE:
         // TODO: Close pipe
         break;
-        
+
     default:
         break;
     }
-    
+
     // mark as free
     memset(entry, 0, sizeof(fd_entry_t));
     entry->type = FD_TYPE_NONE;
@@ -122,15 +122,15 @@ int fd_table_dup(fd_table_t *table, int oldfd)
     fd_entry_t *old = fd_table_get(table, oldfd);
     if (!old)
         return -EBADF;
-    
+
     int newfd = fd_table_alloc(table);
     if (newfd < 0)
         return -EMFILE;
-    
+
     // copy the entry...
     // well, it doesn't really copy it yet... later.
     table->fds[newfd] = *old;
-    
+
     return newfd;
 }
 
@@ -138,19 +138,40 @@ int fd_table_dup2(fd_table_t *table, int oldfd, int newfd)
 {
     if (oldfd == newfd)
         return newfd;
-    
+
     fd_entry_t *old = fd_table_get(table, oldfd);
     if (!old)
         return -EBADF;
-    
+
     if (newfd < 0 || newfd >= MAX_FDS)
         return -EBADF;
-    
+
     if (table->fds[newfd].type != FD_TYPE_NONE)
+    {
         fd_table_free(table, newfd);
-    
-    // copy the input... same as before...
-    table->fds[newfd] = *old;
-    
+    }
+
+    /* Copy the core entry attributes */
+    table->fds[newfd].type = old->type;
+    table->fds[newfd].flags = old->flags;
+
+    if (old->type == FD_TYPE_FILE && old->vfs_file)
+    {
+        /* Allocate a distinct file_t so close() doesn't cause a double-free */
+        file_t *new_file = kmalloc(sizeof(file_t));
+        new_file->vnode = old->vfs_file->vnode;
+        new_file->offset = old->vfs_file->offset;
+        new_file->flags = old->vfs_file->flags;
+
+        /* Retain the vnode so the underlying file stays open */
+        vfs_retain_file(new_file);
+
+        table->fds[newfd].vfs_file = new_file;
+    }
+    else
+    {
+        table->fds[newfd].console_type = old->console_type;
+    }
+
     return newfd;
 }

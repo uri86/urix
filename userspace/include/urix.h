@@ -48,7 +48,8 @@ static inline void exit(int status)
 {
     syscall1(SYS_EXIT, status);
     while (1)
-        ;
+    {
+    }
 }
 
 static inline ssize_t read(int fd, void *buf, size_t count)
@@ -176,6 +177,11 @@ static inline long change_terminal_color(uint64_t fg, uint64_t bg)
 static inline void clear_screen(void)
 {
     syscall0(SYS_CLEAR_SCREEN);
+}
+
+static inline int dup2(int oldfd, int newfd)
+{
+    return syscall2(SYS_DUP2, oldfd, newfd);
 }
 
 #endif /* URIX_H */

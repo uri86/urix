@@ -111,8 +111,25 @@ static int resolve_path(const char *path, char *out_path)
 
 static long sys_exit(int status)
 {
-    debug_kprintf("syscall: exit(%d) from PID %u\n",
-                  status, process_get_current()->pid);
+    debug_kprintf("syscall: exit(%d) from PID %u\n", status, process_get_current()->pid);
+    process_t *current = process_get_current();
+
+    if (current->fd_table)
+    {
+        for (int i = 0; i < MAX_FDS; i++)
+        {
+            fd_entry_t *entry = &current->fd_table->fds[i];
+            if (entry->type != FD_TYPE_NONE)
+            {
+                // If it's a file, decrement the vnode refcount/close it
+                if (entry->type == FD_TYPE_FILE && entry->vfs_file)
+                {
+                    vfs_close(entry->vfs_file);
+                }
+                entry->type = FD_TYPE_NONE;
+            }
+        }
+    }
     process_exit(status);
     return 0; // should never get here...
 }
@@ -126,9 +143,10 @@ static long sys_read(int fd, void *buf, size_t count)
     fd_entry_t *entry = fd_table_get(current->fd_table, fd);
     if (!entry)
         return -EBADF;
-
-    // check if the file/input is readable
-    if (!(entry->flags & (O_RDONLY | O_RDWR)))
+    // Mask out all flags except the access mode (O_ACCMODE is 3)
+    int acc_mode = entry->flags & 3;
+    // Deny read operations if the file was opened as write-only
+    if (acc_mode == O_WRONLY)
         return -EBADF;
 
     switch (entry->type)
@@ -594,6 +612,17 @@ static long sys_chdir(const char *path)
     return 0;
 }
 
+static long sys_dup2(int oldfd, int newfd)
+{
+    process_t *current = process_get_current();
+    if (!current || !current->fd_table)
+    {
+        return -EBADF;
+    }
+
+    return fd_table_dup2(current->fd_table, oldfd, newfd);
+}
+
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
 
 static syscall_fn_t syscall_table[SYS_MAX] = {
@@ -621,6 +650,7 @@ static syscall_fn_t syscall_table[SYS_MAX] = {
     [SYS_CHDIR] = (syscall_fn_t)sys_chdir,
     [SYS_GETCWD] = (syscall_fn_t)sys_getcwd,
     [SYS_READDIR] = (syscall_fn_t)sys_readdir,
+    [SYS_DUP2] = (syscall_fn_t)sys_dup2,
 };
 
 void syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)

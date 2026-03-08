@@ -4,6 +4,7 @@
  * Responsibilities:
  * - define simple in shell function
  * - allow to call other programs that sit in /bin folder
+ * - handle redirects in the user input
  */
 #include "urix.h"
 
@@ -225,7 +226,39 @@ int main(void)
         }
         else
         {
-            if (argv[0][0] != '/')
+            int fd_out = -1;
+            for (int i = 0; argv[i] != NULL; i++)
+            {
+                if (strcmp(argv[i], ">") == 0)
+                {
+                    fd_out = open(argv[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+                    argv[i] = NULL;
+                    break;
+                }
+                else if (strcmp(argv[i], ">>") == 0)
+                {
+                    fd_out = open(argv[i + 1], O_WRONLY | O_CREAT | O_APPEND);
+                    argv[i] = NULL;
+                    break;
+                }
+            }
+
+            if (fd_out >= 0)
+            {
+                dup2(fd_out, STDOUT_FILENO);
+                close(fd_out);
+            }
+
+            /* Executing logic, safely updated */
+            if (argv[0][0] == '/')
+            {
+                strcpy(path, argv[0]);
+            }
+            else if (argv[0][0] == '.' && argv[0][1] == '/')
+            {
+                strcpy(path, argv[0]);
+            }
+            else
             {
                 strcpy(path, "/bin/");
                 char *d = path + 5;
@@ -233,10 +266,6 @@ int main(void)
                 while (*s)
                     *d++ = *s++;
                 *d = '\0';
-            }
-            else
-            {
-                strcpy(path, argv[0]);
             }
 
             if (exec(path, argv) < 0)
