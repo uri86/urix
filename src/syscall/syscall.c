@@ -505,7 +505,7 @@ static long sys_unlink(const char *path)
     return vfs_unlink(abs_path);
 }
 
-static long sys_kernel_print(int flag)
+static long sys_kernel_print(int flag, int pid)
 {
     switch (flag)
     {
@@ -527,6 +527,11 @@ static long sys_kernel_print(int flag)
     case KPPPT:
     {
         process_print_table();
+        break;
+    }
+    case KPPCB:
+    {
+        process_print_pcb(pid);
         break;
     }
     default:

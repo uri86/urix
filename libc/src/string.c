@@ -276,3 +276,101 @@ char *strcat(char *dest, const char *src)
 
     return dest;
 }
+
+long strtol(const char *str, char **endptr, int base)
+{
+    if (!str)
+    {
+        if (endptr) *endptr = NULL;
+        return 0;
+    }
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r' || *str == '\f' || *str == '\v')
+        str++;
+
+    // Handle sign
+    int sign = 1;
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+    else if (*str == '+')
+    {
+        str++;
+    }
+
+    // Determine base
+    if (base == 0)
+    {
+        if (*str == '0')
+        {
+            str++;
+            if (*str == 'x' || *str == 'X')
+            {
+                base = 16;
+                str++;
+            }
+            else
+            {
+                base = 8;
+            }
+        }
+        else
+        {
+            base = 10;
+        }
+    }
+    else if (base < 2 || base > 36)
+    {
+        // Invalid base
+        if (endptr) *endptr = (char *)str;
+        return 0;
+    }
+
+    // Convert
+    long result = 0;
+    int digit;
+    int valid = 0;
+
+    while (*str)
+    {
+        if (*str >= '0' && *str <= '9')
+            digit = *str - '0';
+        else if (*str >= 'a' && *str <= 'z')
+            digit = *str - 'a' + 10;
+        else if (*str >= 'A' && *str <= 'Z')
+            digit = *str - 'A' + 10;
+        else
+            break;
+
+        if (digit >= base)
+            break;
+
+        result = result * base + digit;
+        valid = 1;
+        str++;
+    }
+
+    if (!valid)
+    {
+        // No valid digits
+        if (endptr) *endptr = (char *)str;
+        return 0;
+    }
+
+    if (endptr) *endptr = (char *)str;
+
+    return sign * result;
+}
+
+int atoi(const char *str)
+{
+    return (int)strtol(str, NULL, 10);
+}
+
+long atol(const char *str)
+{
+    return strtol(str, NULL, 10);
+}

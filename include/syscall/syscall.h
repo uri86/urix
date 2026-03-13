@@ -98,6 +98,7 @@
 #define KPMAL 2
 #define KPLG 3
 #define KPPPT 4
+#define KPPCB 5
 
 /**
  * syscall_init - initializes the system calls handler
@@ -108,91 +109,4 @@ void syscall_init(void);
  * syscall_handler - main system call handler
  */
 long syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
-
-/**
- * syscall function, from zero to 6, calls the system call handler with different amounts of arguments.
- *
- */
-
-static inline long syscall0(long number)
-{
-    long ret;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number)
-        : "memory");
-    return ret;
-}
-static inline long syscall1(long number, long arg1)
-{
-    long ret;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1)
-        : "memory");
-    return ret;
-}
-
-static inline long syscall2(long number, long arg1, long arg2)
-{
-    long ret;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1), "S"(arg2)
-        : "memory");
-    return ret;
-}
-
-static inline long syscall3(long number, long arg1, long arg2, long arg3)
-{
-    long ret;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1), "S"(arg2), "d"(arg3)
-        : "memory");
-    return ret;
-}
-
-static inline long syscall4(long number, long arg1, long arg2, long arg3, long arg4)
-{
-    long ret;
-    register long r10 __asm__("r10") = arg4;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10)
-        : "memory");
-    return ret;
-}
-
-static inline long syscall5(long number, long arg1, long arg2, long arg3, long arg4, long arg5)
-{
-    long ret;
-    register long r10 __asm__("r10") = arg4;
-    register long r8 __asm__("r8") = arg5;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8)
-        : "memory");
-    return ret;
-}
-
-static inline long systcall6(long number, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
-{
-    long ret;
-    register long r10 __asm__("r10") = arg4;
-    register long r8 __asm__("r8") = arg5;
-    register long r9 __asm__("r9") = arg6;
-    __asm__ volatile(
-        "int $0x80"
-        : "=a"(ret)
-        : "a"(number), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r9)
-        : "memory");
-    return ret;
-}
 #endif /* SYSCALL_H */

@@ -174,5 +174,40 @@ void *memmove(void *dest, const void *src, size_t n);
  */
 
 char *strcat(char *dest, const char *src);
+/**
+ * atoi - Convert a string to an integer.
+ *
+ * str: Pointer to the null-terminated string to convert.
+ *
+ * Converts the initial portion of the string to int, ignoring leading whitespace,
+ * and stopping at the first non-digit character.
+ *
+ * Returns the converted integer value.
+ */
+int atoi(const char *str);
 
+/**
+ * atol - Convert a string to a long integer.
+ *
+ * str: Pointer to the null-terminated string to convert.
+ *
+ * Converts the initial portion of the string to long, ignoring leading whitespace,
+ * and stopping at the first non-digit character.
+ *
+ * Returns the converted long value.
+ */
+long atol(const char *str);
+
+/**
+ * strtol - Convert a string to a long integer with base.
+ *
+ * str: Pointer to the null-terminated string to convert.
+ * endptr: If not NULL, stores the address of the first invalid character.
+ * base: The base for conversion (2-36), or 0 for auto-detection.
+ *
+ * Converts the string to long, handling sign, base, and stopping at invalid chars.
+ *
+ * Returns the converted long value.
+ */
+long strtol(const char *str, char **endptr, int base);
 #endif

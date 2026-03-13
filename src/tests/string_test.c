@@ -72,5 +72,25 @@ void string_tests(void)
     TEST_ASSERT_EQ((unsigned char)buf4[5], 0x00, "memset inner end");
     TEST_ASSERT_EQ((unsigned char)buf4[6], 0x55, "memset boundary guard post");
 
+    /* atoi */
+    TEST_ASSERT_EQ(atoi("123"), 123, "atoi positive");
+    TEST_ASSERT_EQ(atoi("-456"), -456, "atoi negative");
+    TEST_ASSERT_EQ(atoi("  789"), 789, "atoi leading space");
+    TEST_ASSERT_EQ(atoi("0"), 0, "atoi zero");
+    TEST_ASSERT_EQ(atoi("abc"), 0, "atoi invalid");
+
+    /* atol */
+    TEST_ASSERT_EQ(atol("123456789"), 123456789L, "atol positive");
+    TEST_ASSERT_EQ(atol("-987654321"), -987654321L, "atol negative");
+
+    /* strtol */
+    char *end;
+    TEST_ASSERT_EQ(strtol("123", &end, 10), 123L, "strtol base 10");
+    TEST_ASSERT_EQ(*end, '\0', "strtol endptr");
+    TEST_ASSERT_EQ(strtol("101", &end, 2), 5L, "strtol base 2");
+    TEST_ASSERT_EQ(strtol("0xFF", &end, 0), 255L, "strtol auto hex");
+    TEST_ASSERT_EQ(strtol("077", &end, 0), 63L, "strtol auto octal");
+    TEST_ASSERT_EQ(strtol("-42", &end, 10), -42L, "strtol negative");
+
     TEST_END("string_tests");
 }

@@ -54,6 +54,7 @@
 #define KPMAL 2
 #define KPLG 3
 #define KPPPT 4
+#define KPPCB 5
 
 /* open flags */
 #define O_RDONLY 0x0000

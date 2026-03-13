@@ -1012,3 +1012,57 @@ void process_print_table(void)
 
     kprintf("=====================\n\n");
 }
+
+void process_print_pcb(int pid)
+{
+    const char *state_names[] = {"READY", "RUN ", "BLOCK", "TERM "};
+    const char *pri_names[] = {"IDLE", "LOW ", "NORM", "HIGH", "RT  "};
+
+    process_t *proc = process_get((uint32_t)pid);
+    if (!proc)
+    {
+        kprintf("Process with pid (%d) not found!\n", pid);
+        return;
+    }
+
+    cpu_context_t *c = &proc->context;
+
+    kprintf("============== PROCESS CONTROL BLOCK ==============\n");
+    kprintf("PID:%-6d PPID:%-6d STATE:%-6s ZOMBIE:%-5s\n",
+            proc->pid,
+            proc->parent_pid,
+            state_names[proc->state],
+            proc->is_zombie ? "true" : "false");
+
+    kprintf("NAME:%-17s RING:%d\n", proc->name, proc->privilege);
+    kprintf("PRIORITY:%-6s EFFECTIVE:%-6s\n", pri_names[proc->priority], pri_names[proc->effective_priority]);
+
+    if (proc->addr_space)
+    {
+        kprintf("PML4_PHYS:  %016lx\n", proc->addr_space->pml4_phys);
+        kprintf("PML4_VIRT:  %016lx\n", proc->addr_space->pml4_virt);
+    }
+    else
+    {
+        kprintf("PML4_PHYS:  (null)\n");
+        kprintf("PML4_VIRT:  (null)\n");
+    }
+
+    kprintf("KSTACK_PHYS:%016lx\n", proc->kernel_stack_phys);
+    kprintf("KSTACK_VIRT:%016lx\n", proc->kernel_stack_virt);
+    kprintf("USER_STACK: %016lx\n", proc->user_stack);
+    kprintf("TIMESLICE:%-6u RUNTIME:%-12lu WAIT:%-12lu\n", proc->time_slice_remaining, proc->total_runtime, proc->wait_time);
+    kprintf("--------------- CPU CONTEXT -----------------------\n");
+    kprintf("RAX:%016lx RBX:%016lx RCX:%016lx\n", c->rax, c->rbx, c->rcx);
+    kprintf("RDX:%016lx RSI:%016lx RDI:%016lx\n", c->rdx, c->rsi, c->rdi);
+    kprintf("RBP:%016lx RSP:%016lx RIP:%016lx\n", c->rbp, c->rsp, c->rip);
+    kprintf("R8 :%016lx R9 :%016lx R10:%016lx\n", c->r8, c->r9, c->r10);
+    kprintf("R11:%016lx R12:%016lx R13:%016lx\n", c->r11, c->r12, c->r13);
+    kprintf("R14:%016lx R15:%016lx RFL:%016lx\n", c->r14, c->r15, c->rflags);
+    kprintf("CS :%016lx SS :%016lx\n", c->cs, c->ss);
+    kprintf("NEXT_QUEUE:%016lx\n", (uint64_t)proc->next_in_queue);
+    kprintf("NEXT_ALL  :%016lx\n", (uint64_t)proc->next_all);
+    kprintf("FD_TABLE  :%016lx\n", (uint64_t)proc->fd_table);
+    kprintf("ADDRSPACE :%016lx\n", (uint64_t)proc->addr_space);
+    kprintf("===================================================\n");
+}

@@ -203,6 +203,8 @@ void process_timer_tick(void);
  */
 void process_print_table(void);
 
+void process_print_pcb(int pid);
+
 /**
  * process_context_switch - Low-level context switch
  *
@@ -218,7 +220,6 @@ void process_print_table(void);
  * If old_context is NULL (first run or exiting process),
  * skips save and just restores new context.
  */
-extern void process_context_switch(cpu_context_t *old_context,
-                                   cpu_context_t *new_context);
+extern void process_context_switch(cpu_context_t *old_context, cpu_context_t *new_context);
 
 #endif /* PROCESS_H */

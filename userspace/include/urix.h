@@ -11,13 +11,11 @@
 #define URIX_H
 
 #include "syscall.h"
+#include <stdint.h>
 
 typedef long ssize_t;
 typedef unsigned long size_t;
 typedef int pid_t;
-typedef unsigned long long uint64_t;
-typedef unsigned char uint8_t;
-typedef unsigned int uint32_t;
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -192,6 +190,11 @@ static inline int pipe(int pipefd[2])
 static inline int isatty(int fd)
 {
     return (int)syscall1(SYS_ISATTY, fd);
+}
+
+static inline void print_pcb(int pid)
+{
+    syscall2(SYS_KPS, KPPCB, pid);
 }
 
 #endif /* URIX_H */
