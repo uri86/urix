@@ -10,7 +10,6 @@ embedded_programs.*
 .DS_Store
 
 # misc
-.vscode
 *img
 # idea folder for jetbrains IDEs.
 .idea

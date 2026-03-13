@@ -1,0 +1,15 @@
+{
+  "configurations": [
+    {
+      "name": "URIX",
+      "includePath": ["${workspaceFolder}/libc/include", "${workspaceFolder}/include", "${workspaceFolder}/include/**", "${workspaceFolder}/userspace/include/**"],
+      "defines": [],
+      "compilerPath": "/opt/homebrew/bin/x86_64-elf-gcc", // only works if it was installed via homebrew.
+      "compilerArgs": ["-ffreestanding", "-nostdlib", "-mno-red-zone"],
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-x64"
+    }
+  ],
+  "version": 4
+}
