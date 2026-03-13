@@ -5,7 +5,7 @@
 
 #include <process/fd_table.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <syscall/syscall.h>
 #include <process/pipe.h>
 

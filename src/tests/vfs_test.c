@@ -7,7 +7,7 @@
 #include <fs/blockdev.h>
 #include <fs/ext2.h>
 #include <drivers/ramdisk.h>
-#include <lib/string.h>
+#include <string.h>
 
 /**
  * vfs_basic_tests - Test basic VFS and block device functionality

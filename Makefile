@@ -1,7 +1,7 @@
 # URIX Root Makefile
 include rules.mk
 
-LIBS = src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process src/fs src/syscall
+LIBS = libc/src src/lib src/drivers src/memory src/interrupts src/cpu src/tests src/process src/fs src/syscall
 
 LIB_OBJS = $(foreach lib,$(LIBS),$(BUILDDIR)/$(notdir $(lib)).o)
 

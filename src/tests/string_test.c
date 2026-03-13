@@ -8,7 +8,7 @@
  */
 
 #include <tests/__test.h>
-#include <lib/string.h>
+#include <string.h>
 
 void string_tests(void)
 {

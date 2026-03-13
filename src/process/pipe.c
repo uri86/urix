@@ -6,7 +6,7 @@
 #include <process/pipe.h>
 #include <process/process.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 pipe_t *pipe_create(void)

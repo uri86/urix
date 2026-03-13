@@ -3,10 +3,9 @@
  * string.c - minimal string and number conversion utilities.
  */
 
+#include <string.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <lib/print.h>
-#include <memory/physical/pmm.h>
 
 size_t strlen(const char *str)
 {

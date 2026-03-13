@@ -6,7 +6,7 @@
 #include <memory/vmm.h>
 #include <memory/physical/pmm.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/panic.h>
 
 /*

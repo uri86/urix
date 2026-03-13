@@ -5,7 +5,7 @@
 
 #include <tests/__test.h>
 #include <process/process.h>
-#include <lib/string.h>
+#include <string.h>
 
 #define PROCESS_TEST_COUNT 50
 

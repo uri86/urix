@@ -4,7 +4,7 @@
  */
 
 #include <fs/blockdev.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 static blockdev_t *device_list = NULL;

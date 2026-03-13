@@ -64,7 +64,7 @@ void reverse(char *str, size_t len);
  * Supports negative values only in base 10.
  * If base is invalid, writes an empty string.
  */
-char *itoa(uint64_t num, char *buffer, int base);
+char *itoa(int64_t num, char *buffer, int base);
 
 /**
  * utoa - Convert unsigned integer to string using a given base.

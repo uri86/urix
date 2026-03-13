@@ -102,21 +102,11 @@ no_long_mode_ret:
 
 
 setup_page_tables:
+    # Zero all 3 page tables (p4, p3, p2) at once since they are contiguous in .bss
+    # 4096 bytes * 3 = 12288 bytes = 3072 dwords
     movl $(p4_table - KERNEL_VIRT_BASE), %edi
     xorl %eax, %eax
-    movl $1024, %ecx
-    rep stosl
-
-    # Zero PDPT (p3_table)
-    movl $(p3_table - KERNEL_VIRT_BASE), %edi
-    xorl %eax, %eax
-    movl $1024, %ecx
-    rep stosl
-
-    # Zero PD (p2_table)
-    movl $(p2_table - KERNEL_VIRT_BASE), %edi
-    xorl %eax, %eax
-    movl $1024, %ecx
+    movl $3072, %ecx
     rep stosl
 
     # Set PML4[0] to point to PDPT, p3_table

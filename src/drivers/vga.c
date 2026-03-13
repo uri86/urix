@@ -7,7 +7,7 @@
  */
 
 #include <drivers/vga.h>
-#include <lib/string.h>
+#include <string.h>
 #include <memory/vmm.h>
 
 // state

@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <memory/physical/pmm.h>
 #include <memory/physical/identity_map.h>
 
@@ -32,6 +32,23 @@ static inline unsigned pt_idx(uint64_t addr) { return (addr >> 12) & 0x1FF; }
 
 /* Extract physical address from PTE (clear flags) */
 static inline uint64_t pte_to_phys(uint64_t entry) { return entry & 0x000FFFFFFFFFF000ULL; }
+
+/* Helper to get or allocate a generic mapped page table level */
+static inline uint64_t *get_or_alloc_table(uint64_t *parent_table, unsigned index, uint64_t addr, const char *level_name)
+{
+    if (!(parent_table[index] & PAGE_PRESENT))
+    {
+        uint64_t phys = pt_alloc_page_phys();
+        if (!phys)
+        {
+            kprintf("identity_map_all: ERROR - failed to allocate %s at addr %llx\n", level_name, (uint64_t)addr);
+            return NULL;
+        }
+        parent_table[index] = phys | PAGE_PRESENT_RW;
+        return (uint64_t *)(uintptr_t)phys;
+    }
+    return (uint64_t *)(uintptr_t)pte_to_phys(parent_table[index]);
+}
 
 void pt_alloc_init(uint64_t start_phys, uint64_t limit_phys)
 {
@@ -169,61 +186,16 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
         unsigned i1 = pt_idx(addr);
 
         /* Get or create PDPT */
-        uint64_t *pdpt;
-        if (!(pml4[i4] & PAGE_PRESENT))
-        {
-            uint64_t pdpt_phys = pt_alloc_page_phys();
-            if (!pdpt_phys)
-            {
-                kprintf("identity_map_all: ERROR - failed to allocate PDPT at addr %llx\n",
-                        (uint64_t)addr);
-                return 0;
-            }
-            pml4[i4] = pdpt_phys | PAGE_PRESENT_RW;
-            pdpt = (uint64_t *)(uintptr_t)pdpt_phys;
-        }
-        else
-        {
-            pdpt = (uint64_t *)(uintptr_t)pte_to_phys(pml4[i4]);
-        }
+        uint64_t *pdpt = get_or_alloc_table(pml4, i4, addr, "PDPT");
+        if (!pdpt) return 0;
 
         /* Get or create PD */
-        uint64_t *pd;
-        if (!(pdpt[i3] & PAGE_PRESENT))
-        {
-            uint64_t pd_phys = pt_alloc_page_phys();
-            if (!pd_phys)
-            {
-                kprintf("identity_map_all: ERROR - failed to allocate PD at addr %llx\n",
-                        (uint64_t)addr);
-                return 0;
-            }
-            pdpt[i3] = pd_phys | PAGE_PRESENT_RW;
-            pd = (uint64_t *)(uintptr_t)pd_phys;
-        }
-        else
-        {
-            pd = (uint64_t *)(uintptr_t)pte_to_phys(pdpt[i3]);
-        }
+        uint64_t *pd = get_or_alloc_table(pdpt, i3, addr, "PD");
+        if (!pd) return 0;
 
         /* Get or create PT */
-        uint64_t *pt;
-        if (!(pd[i2] & PAGE_PRESENT))
-        {
-            uint64_t pt_phys = pt_alloc_page_phys();
-            if (!pt_phys)
-            {
-                kprintf("identity_map_all: ERROR - failed to allocate PT at addr %llx\n",
-                        (uint64_t)addr);
-                return 0;
-            }
-            pd[i2] = pt_phys | PAGE_PRESENT_RW;
-            pt = (uint64_t *)(uintptr_t)pt_phys;
-        }
-        else
-        {
-            pt = (uint64_t *)(uintptr_t)pte_to_phys(pd[i2]);
-        }
+        uint64_t *pt = get_or_alloc_table(pd, i2, addr, "PT");
+        if (!pt) return 0;
 
         /* Create final 4KB page mapping (identity: VA = PA) */
         if (!(pt[i1] & PAGE_PRESENT))

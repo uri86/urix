@@ -7,7 +7,7 @@
 #include <fs/blockdev.h>
 #include <fs/ext2.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <memory/kmalloc.h>
 
 int vfs_manager_init(void)

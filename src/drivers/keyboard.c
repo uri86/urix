@@ -7,7 +7,7 @@
 #include <drivers/vga.h>
 #include <interrupts/pic.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 
 #define CURSOR_BLOCK 0xDB
 

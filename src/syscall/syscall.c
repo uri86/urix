@@ -11,7 +11,7 @@
 #include <drivers/keyboard.h>
 #include <drivers/vga.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <fs/vfs.h>
 #include <fs/elf.h>
 #include <memory/vmm.h>

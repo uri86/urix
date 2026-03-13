@@ -16,7 +16,7 @@
 #define __TEST_H
 
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <stdint.h>
 
 /**

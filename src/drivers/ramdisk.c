@@ -5,7 +5,7 @@
 
 #include <drivers/ramdisk.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 typedef struct

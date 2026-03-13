@@ -7,7 +7,7 @@
 #include <memory/physical/pmm.h>
 #include <memory/kmalloc.h>
 #include <fs/vfs.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 #ifndef PAGE_SIZE

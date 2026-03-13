@@ -30,13 +30,6 @@ void clear_screen(void);
 void set_color(vga_color_t fg, vga_color_t bg);
 
 /*
- * takes a string, it's length, a pointer to another string and a list of arguments.
- * takes the original string the places the data from the arguments list into the string in the correct places.
- * saves the new string into the fmt string pointer
- */
-void kvsnprintf(char *buf, size_t size, const char *fmt, va_list args);
-
-/*
  * takes an unsigend 64 bit integer and prints it onto the screen correctly
  */
 void print_uint64(uint64_t value);

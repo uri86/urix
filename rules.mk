@@ -13,7 +13,7 @@ ISODIR = build/iso
 PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 # Include flags (absolute)
-INCLUDE_FLAGS := -I$(PROJECT_ROOT)/include
+INCLUDE_FLAGS := -I$(PROJECT_ROOT)/include -I$(PROJECT_ROOT)/libc/include
 
 # Compiler flags
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -mno-red-zone -mcmodel=kernel $(INCLUDE_FLAGS)

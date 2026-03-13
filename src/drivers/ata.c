@@ -6,7 +6,7 @@
 #include <drivers/ata.h>
 #include <fs/blockdev.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 /* ATA registers (offsets) */

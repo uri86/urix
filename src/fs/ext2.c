@@ -5,7 +5,7 @@
 
 #include <fs/ext2.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 /* Forward Declarations */

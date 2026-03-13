@@ -23,7 +23,7 @@
 #include <memory/physical/identity_map.h>
 #include <memory/vmm.h>
 #include <lib/print.h>
-#include <lib/string.h>
+#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <lib/panic.h>

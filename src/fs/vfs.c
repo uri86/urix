@@ -5,7 +5,7 @@
 
 #include <fs/vfs.h>
 #include <memory/kmalloc.h>
-#include <lib/string.h>
+#include <string.h>
 #include <lib/print.h>
 
 static filesystem_t *filesystems = NULL;
