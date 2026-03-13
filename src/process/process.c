@@ -5,6 +5,7 @@
 
 #include <process/process.h>
 #include <process/fd_table.h>
+#include <process/pipe.h>
 #include <memory/vmm.h>
 #include <memory/kmalloc.h>
 #include <memory/physical/pmm.h>
@@ -497,9 +498,7 @@ int process_fork(void)
 
             case FD_TYPE_PIPE:
                 if (child_fd->pipe)
-                {
-                    // pipes, later on.
-                }
+                    pipe_retain((pipe_t *)child_fd->pipe, (child_fd->flags & PIPE_WRITE) ? 1 : 0);
                 break;
 
             case FD_TYPE_CONSOLE:

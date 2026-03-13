@@ -7,6 +7,7 @@
 #include <memory/kmalloc.h>
 #include <lib/string.h>
 #include <syscall/syscall.h>
+#include <process/pipe.h>
 
 fd_table_t *fd_table_create(void)
 {
@@ -105,7 +106,11 @@ void fd_table_free(fd_table_t *table, int fd)
         break;
 
     case FD_TYPE_PIPE:
-        // TODO: Close pipe
+        if (entry->pipe)
+        {
+            int is_write = (entry->flags & O_WRONLY) ? 1 : 0;
+            pipe_release((pipe_t *)entry->pipe, is_write);
+        }
         break;
 
     default:
@@ -127,9 +132,14 @@ int fd_table_dup(fd_table_t *table, int oldfd)
     if (newfd < 0)
         return -EMFILE;
 
-    // copy the entry...
-    // well, it doesn't really copy it yet... later.
+    // copy the entry (struct only)
     table->fds[newfd] = *old;
+
+    // bump reference counts for shared resources
+    if (old->type == FD_TYPE_PIPE && old->pipe)
+        pipe_retain((pipe_t *)old->pipe, (old->flags & O_WRONLY) ? 1 : 0);
+    else if (old->type == FD_TYPE_FILE && old->vfs_file)
+        vfs_retain_file(old->vfs_file);
 
     return newfd;
 }
@@ -167,6 +177,11 @@ int fd_table_dup2(fd_table_t *table, int oldfd, int newfd)
         vfs_retain_file(new_file);
 
         table->fds[newfd].vfs_file = new_file;
+    }
+    else if (old->type == FD_TYPE_PIPE && old->pipe)
+    {
+        pipe_retain((pipe_t *)old->pipe, (old->flags & O_WRONLY) ? 1 : 0);
+        table->fds[newfd].pipe = old->pipe;
     }
     else
     {

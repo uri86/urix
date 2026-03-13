@@ -4,7 +4,7 @@
  * Responsibilities:
  * - define simple in shell function
  * - allow to call other programs that sit in /bin folder
- * - handle redirects in the user input
+ * - handle redirects in the user input and pipes
  */
 #include "urix.h"
 
@@ -84,6 +84,151 @@ static int readline(char *buf, int max_len)
     return i;
 }
 
+/*
+ * do_exec - build a /bin/<cmd> path and exec with given argv[0..argc-1].
+ *
+ * Called from the child process only. Never returns on success.
+ * On failure prints an error and calls exit(1).
+ */
+static void do_exec(char **argv, int argc, int fd_in, int fd_out)
+{
+    char path[PATH_SIZE];
+
+    if (argc == 0 || argv[0] == NULL)
+        exit(0);
+
+    /* Wire up pipe ends if requested */
+    if (fd_in >= 0)
+    {
+        dup2(fd_in, STDIN_FILENO);
+        close(fd_in);
+    }
+    if (fd_out >= 0)
+    {
+        dup2(fd_out, STDOUT_FILENO);
+        close(fd_out);
+    }
+
+    if (argv[0][0] == '/' || (argv[0][0] == '.' && argv[0][1] == '/'))
+    {
+        char *d = path;
+        const char *s = argv[0];
+        while (*s && d < path + PATH_SIZE - 1)
+            *d++ = *s++;
+        *d = '\0';
+    }
+    else
+    {
+        path[0] = '/';
+        path[1] = 'b';
+        path[2] = 'i';
+        path[3] = 'n';
+        path[4] = '/';
+        path[5] = '\0';
+        char *d = path + 5;
+        const char *s = argv[0];
+        while (*s && d < path + PATH_SIZE - 1)
+            *d++ = *s++;
+        *d = '\0';
+    }
+
+    if (exec(path, argv) < 0)
+    {
+        print("Unknown command: ");
+        print(argv[0]);
+        print("\n");
+        exit(1);
+    }
+    exit(1);
+}
+/*
+ * run_cmd - tokenize cmd_buf, handle > / >> redirects, then exec.
+ * Must be called from a child process.
+ */
+static void run_cmd(char *cmd_buf, int fd_in, int fd_out)
+{
+    char *argv[MAX_ARGS];
+    int argc;
+
+    for (int i = 0; i < MAX_ARGS; i++)
+        argv[i] = NULL;
+
+    argc = tokenize(cmd_buf, argv, MAX_ARGS);
+    if (argc == 0)
+        exit(0);
+
+    for (int i = 0; i < argc; i++)
+    {
+        if (argv[i] == NULL)
+            break;
+
+        if (strcmp(argv[i], ">") == 0)
+        {
+            if (argv[i + 1] != NULL)
+            {
+                int rfd = open(argv[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
+                if (rfd >= 0)
+                {
+                    dup2(rfd, STDOUT_FILENO);
+                    close(rfd);
+                }
+            }
+            argv[i] = NULL;
+            argc = i;
+            break;
+        }
+        else if (strcmp(argv[i], ">>") == 0)
+        {
+            if (argv[i + 1] != NULL)
+            {
+                int rfd = open(argv[i + 1], O_WRONLY | O_CREAT | O_APPEND);
+                if (rfd >= 0)
+                {
+                    dup2(rfd, STDOUT_FILENO);
+                    close(rfd);
+                }
+            }
+            argv[i] = NULL;
+            argc = i;
+            break;
+        }
+    }
+
+    do_exec(argv, argc, fd_in, fd_out);
+}
+
+/*
+ * run_piped - run two commands connected by a pipe.
+ */
+static void run_piped(char *left_buf, char *right_buf)
+{
+    int pipefd[2];
+    if (pipe(pipefd) < 0)
+    {
+        println("pipe: failed to create pipe");
+        return;
+    }
+
+    // stdout redirected to pipe end (left command)
+    if (fork() == 0)
+    {
+        close(pipefd[0]);
+        run_cmd(left_buf, -1, pipefd[1]);
+    }
+
+    // stdin redirected into read end (right command)
+    if (fork() == 0)
+    {
+        close(pipefd[1]);
+        run_cmd(right_buf, pipefd[0], -1);
+    }
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+    wait(NULL);
+    wait(NULL);
+}
+
 int main(void)
 {
     clear_screen();
@@ -93,8 +238,6 @@ int main(void)
     println("Type 'help' for commands");
 
     char buf[BUF_SIZE];
-    char path[128];
-    char *argv[MAX_ARGS];
 
     while (1)
     {
@@ -126,6 +269,8 @@ int main(void)
             println("  mv <src> <dst>          - move/rename file");
             println("  echo [-n] [args...]     - print arguments");
             println("  pwd                     - print working directory");
+            println("");
+            println("Redirects:  cmd > file   cmd >> file   cmd1 | cmd2");
             continue;
         }
 
@@ -216,65 +361,32 @@ int main(void)
             continue;
         }
 
-        int argc = tokenize(buf, argv, MAX_ARGS);
-        if (argc == 0)
+        char *pipe_pos = NULL;
+        for (int i = 0; buf[i] != '\0'; i++)
+        {
+            if (buf[i] == '|')
+            {
+                pipe_pos = &buf[i];
+                break;
+            }
+        }
+
+        if (pipe_pos != NULL)
+        {
+            *pipe_pos = '\0';
+            char *left_cmd = buf;
+            char *right_cmd = pipe_pos + 1;
+            while (*right_cmd == ' ' || *right_cmd == '\t')
+                right_cmd++;
+            run_piped(left_cmd, right_cmd);
             continue;
-
-        if (fork() > 0)
-        {
-            wait(NULL);
         }
-        else
+
+        if (fork() == 0)
         {
-            int fd_out = -1;
-            for (int i = 0; argv[i] != NULL; i++)
-            {
-                if (strcmp(argv[i], ">") == 0)
-                {
-                    fd_out = open(argv[i + 1], O_WRONLY | O_CREAT | O_TRUNC);
-                    argv[i] = NULL;
-                    break;
-                }
-                else if (strcmp(argv[i], ">>") == 0)
-                {
-                    fd_out = open(argv[i + 1], O_WRONLY | O_CREAT | O_APPEND);
-                    argv[i] = NULL;
-                    break;
-                }
-            }
-
-            if (fd_out >= 0)
-            {
-                dup2(fd_out, STDOUT_FILENO);
-                close(fd_out);
-            }
-
-            /* Executing logic, safely updated */
-            if (argv[0][0] == '/')
-            {
-                strcpy(path, argv[0]);
-            }
-            else if (argv[0][0] == '.' && argv[0][1] == '/')
-            {
-                strcpy(path, argv[0]);
-            }
-            else
-            {
-                strcpy(path, "/bin/");
-                char *d = path + 5;
-                const char *s = argv[0];
-                while (*s)
-                    *d++ = *s++;
-                *d = '\0';
-            }
-
-            if (exec(path, argv) < 0)
-            {
-                print("Unknown command: ");
-                println(argv[0]);
-                exit(1);
-            }
+            run_cmd(buf, -1, -1);
         }
+        wait(NULL);
     }
 
     return 0;

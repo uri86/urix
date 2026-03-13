@@ -46,7 +46,8 @@
 #define SYS_TERMINAL_COLOR 32
 #define SYS_CLEAR_SCREEN 33
 #define SYS_READDIR 34
-#define SYS_MAX 35
+#define SYS_ISATTY 35
+#define SYS_MAX 36
 
 /* file descriptor constants */
 #define STDIN_FILENO 0
@@ -106,7 +107,7 @@ void syscall_init(void);
 /**
  * syscall_handler - main system call handler
  */
-void syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
+long syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
 /**
  * syscall function, from zero to 6, calls the system call handler with different amounts of arguments.

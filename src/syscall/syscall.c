@@ -7,6 +7,7 @@
 #include <interrupts/idt.h>
 #include <process/process.h>
 #include <process/fd_table.h>
+#include <process/pipe.h>
 #include <drivers/keyboard.h>
 #include <drivers/vga.h>
 #include <lib/print.h>
@@ -116,19 +117,8 @@ static long sys_exit(int status)
 
     if (current->fd_table)
     {
-        for (int i = 0; i < MAX_FDS; i++)
-        {
-            fd_entry_t *entry = &current->fd_table->fds[i];
-            if (entry->type != FD_TYPE_NONE)
-            {
-                // If it's a file, decrement the vnode refcount/close it
-                if (entry->type == FD_TYPE_FILE && entry->vfs_file)
-                {
-                    vfs_close(entry->vfs_file);
-                }
-                entry->type = FD_TYPE_NONE;
-            }
-        }
+        fd_table_destroy(current->fd_table);
+        current->fd_table = NULL;
     }
     process_exit(status);
     return 0; // should never get here...
@@ -177,6 +167,9 @@ static long sys_read(int fd, void *buf, size_t count)
             return -EBADF;
         return vfs_read(entry->vfs_file, buf, count);
 
+    case FD_TYPE_PIPE:
+        return pipe_read((pipe_t *)entry->pipe, buf, count);
+
     default:
         return -EBADF;
     }
@@ -216,6 +209,9 @@ static long sys_write(int fd, const void *buf, size_t count)
         if (!entry->vfs_file)
             return -EBADF;
         return vfs_write(entry->vfs_file, buf, count);
+
+    case FD_TYPE_PIPE:
+        return pipe_write((pipe_t *)entry->pipe, buf, count);
 
     default:
         return -EBADF;
@@ -270,12 +266,12 @@ static long sys_close(int fd)
     if (!current || !current->fd_table)
         return -EBADF;
 
-    // don't allow closing stdin/stdout/stderr because it will just cause problems...
-    if (fd < 3)
-        return -EBADF;
-
     fd_entry_t *entry = fd_table_get(current->fd_table, fd);
     if (!entry)
+        return -EBADF;
+
+    // don't allow closing stdin/stdout/stderr because it will just cause problems...
+    if (fd < 3 && entry->type == FD_TYPE_CONSOLE)
         return -EBADF;
 
     fd_table_free(current->fd_table, fd);
@@ -363,7 +359,9 @@ static long sys_exec(const char *path, char *const argv[])
 
     /* copy argv strings into kernel memory */
     int argc = 0;
-    char kargs[EXEC_MAX_ARGS][EXEC_MAX_ARG_LEN];
+    char (*kargs)[EXEC_MAX_ARG_LEN] = kmalloc(EXEC_MAX_ARGS * EXEC_MAX_ARG_LEN);
+    if (!kargs)
+        return -ENOMEM;
     if (argv)
         while (argc < EXEC_MAX_ARGS && argv[argc])
         {
@@ -375,12 +373,16 @@ static long sys_exec(const char *path, char *const argv[])
     /* load ELF */
     address_space_t *new_as = vmm_create_address_space();
     if (!new_as)
+    {
+        kfree(kargs);
         return -ENOMEM;
+    }
 
     elf_info_t elf_info;
     if (elf_load_from_file(kpath, new_as, &elf_info) != 0)
     {
         vmm_destroy_address_space(new_as);
+        kfree(kargs);
         return -ENOEXEC;
     }
 
@@ -392,6 +394,7 @@ static long sys_exec(const char *path, char *const argv[])
         if (!phys)
         {
             vmm_destroy_address_space(new_as);
+            kfree(kargs);
             return -ENOMEM;
         }
         memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
@@ -399,6 +402,7 @@ static long sys_exec(const char *path, char *const argv[])
         {
             pmm_free_frame(phys);
             vmm_destroy_address_space(new_as);
+            kfree(kargs);
             return -ENOMEM;
         }
     }
@@ -461,6 +465,7 @@ static long sys_exec(const char *path, char *const argv[])
 
     debug_kprintf("exec: ready — entry=%lx sp=%lx argc=%d\n",
                   elf_info.entry_point, sp, argc);
+    kfree(kargs);
     return 0;
 }
 
@@ -612,6 +617,22 @@ static long sys_chdir(const char *path)
     return 0;
 }
 
+static long sys_isatty(int fd)
+{
+    process_t *current = process_get_current();
+    if (!current || !current->fd_table)
+        return 0;
+
+    fd_entry_t *entry = fd_table_get(current->fd_table, fd);
+    if (!entry)
+        return 0;
+
+    if (entry->type == FD_TYPE_CONSOLE)
+        return 1;
+
+    return 0;
+}
+
 static long sys_dup2(int oldfd, int newfd)
 {
     process_t *current = process_get_current();
@@ -621,6 +642,53 @@ static long sys_dup2(int oldfd, int newfd)
     }
 
     return fd_table_dup2(current->fd_table, oldfd, newfd);
+}
+
+static long sys_pipe(int *pipefd)
+{
+    process_t *current = process_get_current();
+    if (!current || !current->fd_table)
+        return -EBADF;
+
+    // Allocate the shared pipe
+    pipe_t *p = pipe_create();
+    if (!p)
+        return -ENOMEM;
+
+    // Allocate two file descriptors
+    int rfd = fd_table_alloc(current->fd_table);
+    if (rfd < 0)
+    {
+        kfree(p);
+        return -EMFILE;
+    }
+
+    int wfd = fd_table_alloc(current->fd_table);
+    if (wfd < 0)
+    {
+        /* release the already-allocated read slot */
+        current->fd_table->fds[rfd].type = FD_TYPE_NONE;
+        kfree(p);
+        return -EMFILE;
+    }
+
+    // Set up read end
+    fd_entry_t *re = &current->fd_table->fds[rfd];
+    re->type = FD_TYPE_PIPE;
+    re->flags = O_RDONLY;
+    re->pipe = p;
+
+    // Set up write end
+    fd_entry_t *we = &current->fd_table->fds[wfd];
+    we->type = FD_TYPE_PIPE;
+    we->flags = O_WRONLY;
+    we->pipe = p;
+
+    // Write fd numbers back into userspace array
+    pipefd[0] = rfd;
+    pipefd[1] = wfd;
+
+    return 0;
 }
 
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
@@ -651,9 +719,11 @@ static syscall_fn_t syscall_table[SYS_MAX] = {
     [SYS_GETCWD] = (syscall_fn_t)sys_getcwd,
     [SYS_READDIR] = (syscall_fn_t)sys_readdir,
     [SYS_DUP2] = (syscall_fn_t)sys_dup2,
+    [SYS_PIPE] = (syscall_fn_t)sys_pipe,
+    [SYS_ISATTY] = (syscall_fn_t)sys_isatty,
 };
 
-void syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
+long syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
 {
     __asm__ volatile("sti");
     long ret;
@@ -671,7 +741,7 @@ void syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_
         ret = syscall_table[syscall_num](arg1, arg2, arg3, arg4, arg5, arg6);
     }
 
-    (void)ret;
+    return ret;
 }
 
 void syscall_init(void)

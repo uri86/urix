@@ -32,26 +32,14 @@ static void print_uint(unsigned long long n)
     out[j] = '\0';
     print(out);
 }
-
-static int cat_file(const char *path, int number_lines, int *line_num, int *at_line_start)
+static int cat_fd(int fd, int number_lines, int *line_num, int *at_line_start)
 {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0)
-    {
-        print("cat: ");
-        print(path);
-        println(": no such file or directory");
-        return 1;
-    }
-
     char buf[BUF_SIZE];
     int bytes;
-
     while ((bytes = read(fd, buf, sizeof(buf))) > 0)
     {
         if (!number_lines)
         {
-            /* Write massive chunk safely via VFS */
             write(STDOUT_FILENO, buf, bytes);
         }
         else
@@ -65,7 +53,6 @@ static int cat_file(const char *path, int number_lines, int *line_num, int *at_l
                     print("\t");
                     *at_line_start = 0;
                 }
-
                 if (buf[i] == '\n')
                 {
                     write(STDOUT_FILENO, &buf[chunk_start], i - chunk_start + 1);
@@ -73,35 +60,35 @@ static int cat_file(const char *path, int number_lines, int *line_num, int *at_l
                     chunk_start = i + 1;
                 }
             }
-
-            /* Flush any remaining characters in the buffer that didn't end in a newline */
             if (chunk_start < bytes)
             {
                 write(STDOUT_FILENO, &buf[chunk_start], bytes - chunk_start);
             }
         }
     }
-    print("\n");
-    close(fd);
     return 0;
 }
-
+static int cat_file(const char *path, int number_lines, int *line_num, int *at_line_start)
+{
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+    {
+        print("cat: ");
+        print(path);
+        println(": no such file or directory");
+        return 1;
+    }
+    int ret = cat_fd(fd, number_lines, line_num, at_line_start);
+    close(fd);
+    return ret;
+}
 int main(int argc, char **argv)
 {
     int flag_n = 0;
     int file_count = 0;
     int ret = 0;
-
-    /* Maintain state across multiple files */
     int global_line_num = 1;
     int global_at_line_start = 1;
-
-    if (argc < 2)
-    {
-        println("Usage: cat [-n] <file> [file2 ...]");
-        exit(1);
-    }
-
     for (int i = 1; i < argc; i++)
     {
         if (argv[i][0] == '-' && argv[i][1] != '\0' && argv[i][2] == '\0')
@@ -123,12 +110,15 @@ int main(int argc, char **argv)
             ret |= cat_file(argv[i], flag_n, &global_line_num, &global_at_line_start);
         }
     }
-
+    /* No file arguments: read from stdin (makes pipes work) */
     if (file_count == 0)
     {
-        println("cat: no files specified");
-        exit(1);
+        if (isatty(STDIN_FILENO))
+        {
+            print("Usage: cat [-n] <file> [file2 ...]\n");
+            exit(1);
+        }
+        ret = cat_fd(STDIN_FILENO, flag_n, &global_line_num, &global_at_line_start);
     }
-
     return ret;
 }

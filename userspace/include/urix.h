@@ -184,4 +184,14 @@ static inline int dup2(int oldfd, int newfd)
     return syscall2(SYS_DUP2, oldfd, newfd);
 }
 
+static inline int pipe(int pipefd[2])
+{
+    return (int)syscall1(SYS_PIPE, (long)pipefd);
+}
+
+static inline int isatty(int fd)
+{
+    return (int)syscall1(SYS_ISATTY, fd);
+}
+
 #endif /* URIX_H */
