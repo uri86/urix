@@ -3,7 +3,6 @@
  * string.c - minimal string and number conversion utilities.
  */
 
-#include <string.h>
 #include <stdint.h>
 #include <stddef.h>
 

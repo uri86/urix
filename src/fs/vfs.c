@@ -266,6 +266,14 @@ int vfs_open(const char *path, uint32_t flags, file_t **out)
     vnode_t *node = NULL;
     int resolved = vfs_resolve(path, &node);
 
+    if (resolved == 0) {
+        // Prevent writing to directories
+        if ((flags & VFS_WRITE) && node->type == VFS_DIR) {
+            vfs_vnode_put(node);
+            return -1;
+        }
+    }
+
     if (resolved != 0 && (flags & VFS_CREATE))
     {
         debug_kprintf("VFS: File '%s' not found, creating...\n", path);

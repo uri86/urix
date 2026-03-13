@@ -17,7 +17,7 @@
  * Returns the number of characters before the first null byte.
  * Does not perform bounds checking—assumes valid and terminated input.
  */
-uint64_t strlen(const char *str);
+size_t strlen(const char *str);
 
 /**
  * strcpy - Copy a null-terminated string to a buffer.
@@ -134,7 +134,7 @@ char *strncpy(char *dest, const char *src, size_t n);
  * Writes value into count bytes starting from dest.
  * Returns dest.
  */
-void *memset(void *dest, int value, uint64_t count);
+void *memset(void *dest, int value, size_t count);
 
 /**
  * memcpy - Copy memory area.
