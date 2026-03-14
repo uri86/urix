@@ -2,9 +2,11 @@
  * Licensed under MIT License - URIX project.
  * change_display.c - Interactive terminal color changer.
  */
-
 #include "urix.h"
+#include "../liburix/conf.h"
+#include "string.h"
 
+#define SHELL_CONF  "/etc/shell.conf"
 #define NUM_COLORS 16
 
 static const char *color_names[NUM_COLORS] = {
@@ -51,13 +53,41 @@ static void render(int fg, int bg)
     println(color_names[fg]);
 
     println("");
-    println("[W/S] change  [Tab] switch  [R] reset  [Q] quit");
+    println("[W/S] change  [Tab] switch  [R] reset  [Enter] save & quit  [Q] quit");
+}
+
+/*
+ * save_colors - persist fg and bg into /etc/shell.conf.
+ */
+static void save_colors(int fg, int bg)
+{
+    conf_t cfg;
+    char   val[8];
+
+    conf_load(&cfg, SHELL_CONF);
+
+    itoa(fg, val, 10);
+    conf_set(&cfg, "fg", val);
+
+    itoa(bg, val, 10);
+    conf_set(&cfg, "bg", val);
+
+    conf_save(&cfg);
 }
 
 int main(void)
 {
     int fg = 7;
     int bg = 0;
+
+    /* start from whatever is already saved */
+    conf_t cfg;
+    char   val[8];
+    if (conf_load(&cfg, SHELL_CONF) == CONF_OK)
+    {
+        if (conf_get(&cfg, "fg", val, sizeof(val)) == CONF_OK) fg = atoi(val);
+        if (conf_get(&cfg, "bg", val, sizeof(val)) == CONF_OK) bg = atoi(val);
+    }
 
     change_terminal_color(fg, bg);
     render(fg, bg);
@@ -88,6 +118,12 @@ int main(void)
         case 'r':
             fg = 7;
             bg = 0;
+            break;
+        case '\r':
+        case '\n':
+            save_colors(fg, bg);
+            clear_screen();
+            exit(0);
             break;
         case 'q':
             clear_screen();

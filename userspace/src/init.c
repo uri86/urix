@@ -8,14 +8,7 @@
 int main(void)
 {
     println("Started init process.");
-    pid_t pid = getpid();
-    print("PID: ");
-    if (pid >= 100)
-        putchar('0' + (pid / 100));
-    if (pid >= 10)
-        putchar('0' + ((pid / 10) % 10));
-    putchar('0' + (pid % 10));
-    putchar('\n');
+    mkdir("etc", 0775);
     while (1)
     {
         int pid = fork();

@@ -232,6 +232,34 @@ static long sys_open(const char *path, int flags)
     if (fd < 0)
         return -EMFILE;
 
+    fd_entry_t *entry = &current->fd_table->fds[fd];
+
+    /* Special-case some /dev paths so they map to console I/O */
+    if (strcmp(abs_path, "/dev/console") == 0 || strcmp(abs_path, "/dev/tty") == 0 ||
+        strcmp(abs_path, "/dev/stdout") == 0)
+    {
+        entry->type = FD_TYPE_CONSOLE;
+        entry->flags = flags;
+        entry->console_type = 1;
+        return fd;
+    }
+
+    if (strcmp(abs_path, "/dev/stderr") == 0)
+    {
+        entry->type = FD_TYPE_CONSOLE;
+        entry->flags = flags;
+        entry->console_type = 2;
+        return fd;
+    }
+
+    if (strcmp(abs_path, "/dev/stdin") == 0 || strcmp(abs_path, "/dev/keyboard") == 0)
+    {
+        entry->type = FD_TYPE_CONSOLE;
+        entry->flags = flags;
+        entry->console_type = 0;
+        return fd;
+    }
+
     uint32_t vfs_flags = 0;
     if (flags & O_RDONLY)
         vfs_flags |= VFS_READ;
@@ -253,7 +281,6 @@ static long sys_open(const char *path, int flags)
         return ret;
     }
 
-    fd_entry_t *entry = &current->fd_table->fds[fd];
     entry->type = FD_TYPE_FILE;
     entry->flags = flags;
     entry->vfs_file = file;

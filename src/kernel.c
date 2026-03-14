@@ -119,6 +119,55 @@ void keyboard_test_process(void)
     process_exit(0);
 }
 
+static void init_devfs(void)
+{
+    kprintf("=== Initializing /dev filesystem ===\n");
+
+    int ret = vfs_mkdir("/dev");
+    if (ret != 0)
+    {
+        kprintf("  /dev might exist already (code %d)\n", ret);
+    }
+
+    const char *dev_entries[] = {"console", "keyboard", "stdin", "stdout", "stderr", "null"};
+    for (size_t i = 0; i < sizeof(dev_entries) / sizeof(dev_entries[0]); i++)
+    {
+        char path[32];
+        path[0] = '/';
+        path[1] = 'd';
+        path[2] = 'e';
+        path[3] = 'v';
+        path[4] = '/';
+        strcpy(&path[5], dev_entries[i]);
+
+        file_t *f = NULL;
+        ret = vfs_open(path, VFS_CREATE | VFS_READ, &f);
+        if (ret == 0 && f)
+            vfs_close(f);
+    }
+
+    /* Create entries for block devices under /dev */
+    blockdev_t *blk = blockdev_get_list();
+    while (blk)
+    {
+        char path[32];
+        path[0] = '/';
+        path[1] = 'd';
+        path[2] = 'e';
+        path[3] = 'v';
+        path[4] = '/';
+        strncpy(&path[5], blk->name, sizeof(path) - 6);
+        path[sizeof(path) - 1] = '\0';
+
+        file_t *f = NULL;
+        ret = vfs_open(path, VFS_CREATE | VFS_READ, &f);
+        if (ret == 0 && f)
+            vfs_close(f);
+
+        blk = blk->next;
+    }
+}
+
 void load_userspace_binaries(void)
 {
     kprintf("=== Loading Userspace Programs ===\n");
@@ -322,6 +371,8 @@ void kernel_main(uint64_t mb_info_addr)
         debug_kprintf("Starting VFS Manager auto-scan...\n");
         if (vfs_manager_init() != 0)
             PANIC("VFS Manager failed to mount root filesystem");
+
+        init_devfs();
     }
 
     /* Initialize keyboard driver */

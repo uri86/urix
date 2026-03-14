@@ -7,11 +7,17 @@
  * - handle redirects in the user input and pipes
  */
 #include "urix.h"
+#include "../liburix/conf.h"
+#include "string.h"
 
 #define CURSOR_BLOCK 219
 #define MAX_ARGS 16
 #define BUF_SIZE 256
 #define PATH_SIZE 512
+
+#define SHELL_CONF "/etc/shell.conf"
+#define DEFAULT_FG 7
+#define DEFAULT_BG 0
 
 static void print_cwd_prompt(void)
 {
@@ -85,6 +91,28 @@ static int readline(char *buf, int max_len)
 }
 
 /*
+ * load_colors - read fg and bg from /etc/shell.conf.
+ * Falls back to defaults if the file is missing or a key is absent.
+ */
+static void load_colors(uint64_t *fg, uint64_t *bg)
+{
+    conf_t cfg;
+    char val[CONF_VAL_LEN];
+
+    *fg = DEFAULT_FG;
+    *bg = DEFAULT_BG;
+
+    if (conf_load(&cfg, SHELL_CONF) != CONF_OK)
+        return;
+
+    if (conf_get(&cfg, "fg", val, sizeof(val)) == CONF_OK)
+        *fg = (uint64_t)atoi(val);
+
+    if (conf_get(&cfg, "bg", val, sizeof(val)) == CONF_OK)
+        *bg = (uint64_t)atoi(val);
+}
+
+/*
  * do_exec - build a /bin/<cmd> path and exec with given argv[0..argc-1].
  *
  * Called from the child process only. Never returns on success.
@@ -141,6 +169,7 @@ static void do_exec(char **argv, int argc, int fd_in, int fd_out)
     }
     exit(1);
 }
+
 /*
  * run_cmd - tokenize cmd_buf, handle > / >> redirects, then exec.
  * Must be called from a child process.
@@ -233,7 +262,11 @@ int main(void)
 {
     clear_screen();
     prntlg();
-    change_terminal_color(7, 0);
+
+    uint64_t fg, bg;
+    load_colors(&fg, &bg);
+    change_terminal_color(fg, bg);
+
     println("URIX Shell v0.2");
     println("Type 'help' for commands");
 
@@ -321,7 +354,7 @@ int main(void)
         if (strcmp(buf, "prntlg") == 0)
         {
             prntlg();
-            change_terminal_color(7, 0);
+            change_terminal_color(fg, bg);
             continue;
         }
 
