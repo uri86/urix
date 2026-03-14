@@ -928,7 +928,7 @@ static int ext2_lookup(vnode_t *dir, const char *name, vnode_t **res)
                     kfree(buf);
                     return -1;
                 }
-                
+
                 ext2_inode_t target;
                 ext2_read_inode(m, d->inode, &target);
 
@@ -970,17 +970,47 @@ static int ext2_read(vnode_t *node, void *buf, size_t size, uint64_t offset)
     uint32_t end_blk = (offset + size - 1) / m->block_size;
     uint32_t copied = 0;
 
+    // Number of block pointers that fit in one indirect block
+    uint32_t ptrs_per_block = m->block_size / sizeof(uint32_t);
+
     uint8_t *tmp = kmalloc(m->block_size);
+    uint8_t *ind_buf = NULL; // holds singly-indirect table
 
     for (uint32_t b = start_blk; b <= end_blk; b++)
     {
-        if (b >= 12)
-            break; // Indirect blocks not implemented
+        uint32_t phys_block = 0;
 
-        uint32_t phys_block = inode.i_block[b];
+        if (b < 12)
+        {
+            // direct block
+            phys_block = inode.i_block[b];
+        }
+        else if (b < 12 + ptrs_per_block)
+        {
+            // Singly-indirect block (i_block[12])
+            if (inode.i_block[12] == 0)
+            {
+                phys_block = 0; // treat as a hole
+            }
+            else
+            {
+                if (!ind_buf)
+                {
+                    ind_buf = kmalloc(m->block_size);
+                    read_fs_block(m, inode.i_block[12], ind_buf);
+                }
+                uint32_t idx = b - 12;
+                phys_block = ((uint32_t *)ind_buf)[idx];
+            }
+        }
+        else
+        {
+            break; // Doubly/triply-indirect not implemented
+        }
+
         if (phys_block == 0)
         {
-            memset(tmp, 0, m->block_size); // Sparse file support (holes read as zero)
+            memset(tmp, 0, m->block_size); // Sparse hole reads as zero
         }
         else
         {
@@ -996,6 +1026,8 @@ static int ext2_read(vnode_t *node, void *buf, size_t size, uint64_t offset)
         copied += chunk;
     }
 
+    if (ind_buf)
+        kfree(ind_buf);
     kfree(tmp);
     return copied;
 }
@@ -1018,29 +1050,96 @@ static int ext2_write(vnode_t *node, const void *buf, size_t size, uint64_t offs
     uint32_t end_blk = (offset + size - 1) / m->block_size;
     uint32_t copied = 0;
 
+    // Number of block pointers that fit in one indirect block
+    uint32_t ptrs_per_block = m->block_size / sizeof(uint32_t);
+
     uint8_t *tmp = kmalloc(m->block_size);
+    uint8_t *ind_buf = NULL; // singly-indirect pointer table
+    int ind_dirty = 0;
 
     for (uint32_t b = start_blk; b <= end_blk; b++)
     {
-        if (b >= 12)
-            break; // Indirect blocks not implemented
+        uint32_t phys_block = 0;
+        int is_indirect = 0;
+        uint32_t ind_idx = 0;
 
-        if (inode.i_block[b] == 0)
+        if (b < 12)
         {
-            uint32_t new_blk = alloc_block(m);
-            if (!new_blk)
+            // Direct block
+            phys_block = inode.i_block[b];
+
+            if (phys_block == 0)
             {
-                debug_kprintf("Ext2: Failed to allocate block\n");
-                break;
+                phys_block = alloc_block(m);
+                if (!phys_block)
+                {
+                    debug_kprintf("Ext2: Failed to allocate direct block\n");
+                    break;
+                }
+                debug_kprintf("Ext2: Allocated direct block %u for inode %lu\n", phys_block, node->inode);
+                inode.i_block[b] = phys_block;
+                inode.i_blocks += (m->block_size / 512);
+                memset(tmp, 0, m->block_size);
             }
-            debug_kprintf("Ext2: Allocated block %u for inode %lu\n", new_blk, node->inode);
-            inode.i_block[b] = new_blk;
-            inode.i_blocks += (m->block_size / 512);
-            memset(tmp, 0, m->block_size);
+            else
+            {
+                read_fs_block(m, phys_block, tmp);
+            }
+        }
+        else if (b < 12 + ptrs_per_block)
+        {
+            // Singly-indirect block
+            is_indirect = 1;
+            ind_idx = b - 12;
+
+            // Allocate the indirect pointer block itself if needed
+            if (inode.i_block[12] == 0)
+            {
+                uint32_t ind_blk = alloc_block(m);
+                if (!ind_blk)
+                {
+                    debug_kprintf("Ext2: Failed to allocate indirect block\n");
+                    break;
+                }
+                debug_kprintf("Ext2: Allocated indirect block %u for inode %lu\n",
+                              ind_blk, node->inode);
+                inode.i_block[12] = ind_blk;
+                inode.i_blocks += (m->block_size / 512);
+
+                ind_buf = kmalloc(m->block_size);
+                memset(ind_buf, 0, m->block_size);
+            }
+            else if (!ind_buf)
+            {
+                ind_buf = kmalloc(m->block_size);
+                read_fs_block(m, inode.i_block[12], ind_buf);
+            }
+
+            phys_block = ((uint32_t *)ind_buf)[ind_idx];
+
+            if (phys_block == 0)
+            {
+                phys_block = alloc_block(m);
+                if (!phys_block)
+                {
+                    debug_kprintf("Ext2: Failed to allocate indirect data block\n");
+                    break;
+                }
+                debug_kprintf("Ext2: Allocated indirect data block %u for inode %lu\n",
+                              phys_block, node->inode);
+                ((uint32_t *)ind_buf)[ind_idx] = phys_block;
+                inode.i_blocks += (m->block_size / 512);
+                ind_dirty = 1;
+                memset(tmp, 0, m->block_size);
+            }
+            else
+            {
+                read_fs_block(m, phys_block, tmp);
+            }
         }
         else
         {
-            read_fs_block(m, inode.i_block[b], tmp);
+            break; // Doubly/triply-indirect not implemented
         }
 
         uint32_t block_off = (b == start_blk) ? (offset % m->block_size) : 0;
@@ -1049,10 +1148,20 @@ static int ext2_write(vnode_t *node, const void *buf, size_t size, uint64_t offs
             chunk = size - copied;
 
         memcpy(tmp + block_off, (uint8_t *)buf + copied, chunk);
-        write_fs_block(m, inode.i_block[b], tmp);
+        write_fs_block(m, phys_block, tmp);
+
+        if (is_indirect)
+            ind_dirty = 1;
+
         copied += chunk;
     }
 
+    // Flush indirect pointer table if it was modified
+    if (ind_buf && ind_dirty)
+        write_fs_block(m, inode.i_block[12], ind_buf);
+
+    if (ind_buf)
+        kfree(ind_buf);
     kfree(tmp);
 
     if (offset + copied > inode.i_size)
@@ -1062,12 +1171,10 @@ static int ext2_write(vnode_t *node, const void *buf, size_t size, uint64_t offs
     }
 
     ext2_write_inode(m, node->inode, &inode);
-    debug_kprintf("Ext2: Write complete. %u bytes written, new size: %u\n",
-                  copied, inode.i_size);
+    debug_kprintf("Ext2: Write complete. %u bytes written, new size: %u\n", copied, inode.i_size);
 
     return copied;
 }
-
 /**
  * Mounts an Ext2 filesystem.
  * Reads superblock, block group descriptors, and initializes the root vnode.
@@ -1098,7 +1205,7 @@ static int ext2_mount(const char *devname, mount_t **mnt)
     (*mnt)->fs_data = m;
     (*mnt)->fs = &ext2_fs;
 
-   vnode_t *root = kmalloc(sizeof(vnode_t));
+    vnode_t *root = kmalloc(sizeof(vnode_t));
     memset(root, 0, sizeof(vnode_t));
     root->inode = 2; // Ext2 Root Inode is always 2
     root->type = VFS_DIR;
