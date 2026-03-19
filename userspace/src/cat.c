@@ -66,6 +66,7 @@ static int cat_fd(int fd, int number_lines, int *line_num, int *at_line_start)
             }
         }
     }
+    print("\n");
     return 0;
 }
 static int cat_file(const char *path, int number_lines, int *line_num, int *at_line_start)
