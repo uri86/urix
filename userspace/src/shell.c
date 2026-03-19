@@ -10,7 +10,6 @@
 #include "../liburix/conf.h"
 #include "string.h"
 
-#define CURSOR_BLOCK 219
 #define MAX_ARGS 16
 #define BUF_SIZE 256
 #define PATH_SIZE 512
@@ -66,9 +65,7 @@ static int readline(char *buf, int max_len)
     int i = 0;
     while (i < max_len - 1)
     {
-        putchar(CURSOR_BLOCK);
         int c = getchar();
-        print("\b \b");
 
         if (c == '\n' || c == '\r')
         {
