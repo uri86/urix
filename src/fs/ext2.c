@@ -18,6 +18,7 @@ static int ext2_rmdir(vnode_t *dir, const char *name);
 static int ext2_read(vnode_t *node, void *buf, size_t size, uint64_t offset);
 static int ext2_write(vnode_t *node, const void *buf, size_t size, uint64_t offset);
 static int ext2_readdir(vnode_t *node, dirent_t *dirent, uint64_t index);
+static int ext2_truncate(vnode_t *node);
 static void ext2_release(vnode_t *node);
 
 static filesystem_t ext2_fs = {
@@ -34,6 +35,7 @@ static struct vfs_ops ext2_ops = {
     .mkdir = ext2_mkdir,
     .unlink = ext2_unlink,
     .rmdir = ext2_rmdir,
+    .truncate = ext2_truncate,
     .release = ext2_release};
 
 void ext2_init(void)
@@ -789,6 +791,59 @@ static int ext2_unlink(vnode_t *dir, const char *name)
     kfree(target);
 
     debug_kprintf("Ext2: File unlinked successfully\n");
+    return 0;
+}
+
+/**
+ * Truncates a file to zero size, freeing all its blocks.
+ */
+static int ext2_truncate(vnode_t *node)
+{
+    if (!node || node->type != VFS_FILE)
+        return -1;
+
+    ext2_mount_t *m = (ext2_mount_t *)node->mount->fs_data;
+    ext2_inode_t inode;
+
+    if (ext2_read_inode(m, node->inode, &inode) != 0)
+        return -1;
+
+    for (int i = 0; i < 12; i++)
+    {
+        if (inode.i_block[i] != 0)
+        {
+            free_block(m, inode.i_block[i]);
+            inode.i_block[i] = 0;
+        }
+    }
+
+    if (inode.i_block[12] != 0)
+    {
+        uint32_t *ind_buf = kmalloc(m->block_size);
+        if (ind_buf)
+        {
+            read_fs_block(m, inode.i_block[12], (uint8_t *)ind_buf);
+            uint32_t ptrs = m->block_size / sizeof(uint32_t);
+            for (uint32_t i = 0; i < ptrs; i++)
+            {
+                if (ind_buf[i] != 0)
+                {
+                    free_block(m, ind_buf[i]);
+                }
+            }
+            kfree(ind_buf);
+        }
+        free_block(m, inode.i_block[12]);
+        inode.i_block[12] = 0;
+    }
+
+    inode.i_size = 0;
+    inode.i_blocks = 0;
+
+    if (ext2_write_inode(m, node->inode, &inode) != 0)
+        return -1;
+
+    node->size = 0;
     return 0;
 }
 

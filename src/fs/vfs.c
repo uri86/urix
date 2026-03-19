@@ -73,7 +73,6 @@ mount_t *vfs_get_root(void)
     return root_mount;
 }
 
-
 static void vfs_vnode_get(vnode_t *node)
 {
     if (!node)
@@ -81,7 +80,6 @@ static void vfs_vnode_get(vnode_t *node)
     node->refcount++;
     debug_kprintf("VFS: vnode_get inode=%lu refcount=%u\n", node->inode, node->refcount);
 }
-
 
 static void vfs_vnode_put(vnode_t *node)
 {
@@ -182,7 +180,7 @@ static int vfs_resolve(const char *path, vnode_t **out)
         /* Skip trailing slashes */
         while (*p == '/')
             p++;
-        
+
         if (*p == '\0')
             break;
     }
@@ -266,9 +264,11 @@ int vfs_open(const char *path, uint32_t flags, file_t **out)
     vnode_t *node = NULL;
     int resolved = vfs_resolve(path, &node);
 
-    if (resolved == 0) {
+    if (resolved == 0)
+    {
         // Prevent writing to directories
-        if ((flags & VFS_WRITE) && node->type == VFS_DIR) {
+        if ((flags & VFS_WRITE) && node->type == VFS_DIR)
+        {
             vfs_vnode_put(node);
             return -1;
         }
@@ -353,6 +353,10 @@ int vfs_open(const char *path, uint32_t flags, file_t **out)
     }
     else if (flags & VFS_TRUNC)
     {
+        if (node->ops && node->ops->truncate)
+        {
+            node->ops->truncate(node);
+        }
         f->offset = 0;
     }
     else

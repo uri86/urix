@@ -51,6 +51,7 @@ struct vfs_ops
     int (*mkdir)(vnode_t *dir, const char *name, vnode_t **result);
     int (*unlink)(vnode_t *dir, const char *name);
     int (*rmdir)(vnode_t *dir, const char *name);
+    int (*truncate)(vnode_t *node);
     void (*release)(vnode_t *node);
 };
 
