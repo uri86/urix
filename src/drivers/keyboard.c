@@ -112,20 +112,36 @@ void keyboard_interrupt_handler(void)
             return;
 
         case 0x48: /* Up arrow */
-            if (!released)
-                buffer_push(KEY_UP);
+            if (!released) 
+            { 
+                buffer_push(0x1B); 
+                buffer_push('['); 
+                buffer_push('A'); 
+            }
             return;
         case 0x50: /* Down arrow */
-            if (!released)
-                buffer_push(KEY_DOWN);
+            if (!released) 
+            { 
+                buffer_push(0x1B); 
+                buffer_push('[');
+                buffer_push('B'); 
+            }
             return;
         case 0x4B: /* Left arrow */
-            if (!released)
-                buffer_push(KEY_LEFT);
+            if (!released) 
+            { 
+                buffer_push(0x1B); 
+                buffer_push('['); 
+                buffer_push('D'); 
+            }
             return;
         case 0x4D: /* Right arrow */
-            if (!released)
-                buffer_push(KEY_RIGHT);
+            if (!released) 
+            { 
+                buffer_push(0x1B); 
+                buffer_push('['); 
+                buffer_push('C'); 
+            }
             return;
         case 0x49: /* Page Up */
             if (!released)
