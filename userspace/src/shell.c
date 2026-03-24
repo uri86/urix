@@ -17,17 +17,36 @@
 #define SHELL_CONF "/etc/shell.conf"
 #define DEFAULT_FG 7
 #define DEFAULT_BG 0
+#define COLOR_RED 4
 
 static void print_cwd_prompt(void)
 {
     char cwd[PATH_SIZE];
     int r = getcwd(cwd, sizeof(cwd));
+    uint64_t bg = DEFAULT_BG, fg = DEFAULT_FG, pc = COLOR_RED;
+    conf_t cfg;
+    char val[CONF_VAL_LEN];
+
+    if (conf_load(&cfg, SHELL_CONF) != CONF_OK)
+        return;
+
+    if (conf_get(&cfg, "fg", val, sizeof(val)) == CONF_OK)
+        fg = (uint64_t)atoi(val);
+
+    if (conf_get(&cfg, "bg", val, sizeof(val)) == CONF_OK)
+        bg = (uint64_t)atoi(val);
+    if (conf_get(&cfg, "pc", val, sizeof(val)) == CONF_OK)
+        pc = (uint64_t)atoi(val);
+
+    // load_colors(&fg, &bg);
 
     print("user@urix:");
+    change_terminal_color(pc, bg);
     if (r > 0)
         print(cwd);
     else
         print("/");
+    change_terminal_color(fg, bg);
     print("> ");
 }
 
