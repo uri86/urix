@@ -47,8 +47,7 @@ static void test_suite_process(void)
 {
     run_all_tests();
     process_exit(0);
-    for (;;)
-        __asm__ volatile("hlt");
+    halt();
 }
 
 void keyboard_test_process(void)
@@ -314,6 +313,9 @@ void kernel_main(uint64_t mb_info_addr)
     debug_kprintf("Initializing GDT...\n");
     gdt_init();
 
+    debug_kprintf("Enabling SSE...\n");
+    enable_sse();
+
     /* Initialize IDT */
     debug_kprintf("Initializing IDT...\n");
     idt_init();
@@ -325,7 +327,6 @@ void kernel_main(uint64_t mb_info_addr)
     for (int i = 0; i < 16; i++)
         pic_mask_irq(i);
 
-    enable_sse();
     debug_kprintf("Initializing PMM...\n");
     pmm_init(tag);
 

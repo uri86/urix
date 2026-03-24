@@ -5,6 +5,7 @@
 
 #include <lib/panic.h>
 #include <lib/print.h>
+#include <lib/utils.h>
 
 void panic(const char *message, const char *file, uint32_t line)
 {
@@ -18,8 +19,5 @@ void panic(const char *message, const char *file, uint32_t line)
     kprintf("Line:   %u\n", line);
     kprintf("--------------------------------------------------\n");
     kprintf("System Halted.\n");
-    for (;;)
-    {
-        __asm__ volatile("hlt");
-    }
+    halt();
 }

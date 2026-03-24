@@ -16,6 +16,7 @@
 #define __TEST_H
 
 #include <lib/print.h>
+#include <lib/utils.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -42,8 +43,7 @@ static inline void test_fail(const char *name, const char *msg)
     kprintf("[FAIL] %s: %s\n", name, msg);
 
     /* Halt immediately to preserve failure context */
-    for (;;)
-        __asm__ volatile("hlt");
+    halt();
 }
 
 /*

@@ -31,4 +31,9 @@ extern uint32_t debug_delay_ms;
  */
 void delay_ms(uint32_t ms);
 
+/**
+ * halt - halt the entire OS using the hlt assembly command.
+ */
+void halt(void);
+
 #endif /* UTILS_H */

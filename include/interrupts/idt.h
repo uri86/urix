@@ -38,6 +38,28 @@ struct idt_ptr
 #define IDT_GATE_TRAP 0x8F      // Present, DPL=0, Type=Trap Gate
 #define IDT_GATE_TASK 0x85      // Present, DPL=0, Type=Task Gate
 
+// CPU state pushed natively by the hardware during an exception
+struct cpu_interrupt_frame
+{
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t rflags;
+    uint64_t rsp;
+    uint64_t ss;
+} __attribute__((packed));
+
+// CPU state pushed manually by isr_common_stub for generic handlers
+struct interrupt_frame
+{
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+    uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
+    uint64_t int_no, err_code;
+    uint64_t rip, cs, rflags, rsp, ss;
+} __attribute__((packed));
+
+// Exception handler callback type
+typedef void (*exception_handler_t)(struct interrupt_frame *frame);
+
 // Exception vectors
 #define EXC_DIVIDE_ERROR 0
 #define EXC_DEBUG 1
@@ -81,5 +103,7 @@ void idt_set_gate(uint8_t vector, uint64_t handler, uint16_t selector, uint8_t t
  * Update the address stored inside the idtr pointer to reflect the virtual address.
  */
 void idt_update_for_higher_half(void);
+
+void exception_handler(struct interrupt_frame *frame);
 
 #endif // IDT_H

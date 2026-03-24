@@ -17,6 +17,7 @@ void pmm_tests(void);
 void vmm_tests(void);
 void process_tests(void);
 void vfs_tests(void);
+void interrupt_tests(void);
 
 void run_all_tests(void)
 {
@@ -30,5 +31,6 @@ void run_all_tests(void)
     vmm_tests();
     vfs_tests();
     process_tests();
+    interrupt_tests();
     kprintf("\n===== ALL TESTS PASSED =====\n");
 }

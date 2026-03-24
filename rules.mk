@@ -16,5 +16,5 @@ PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 INCLUDE_FLAGS := -I$(PROJECT_ROOT)/include -I$(PROJECT_ROOT)/libc/include
 
 # Compiler flags
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -mno-red-zone -mcmodel=kernel $(INCLUDE_FLAGS)
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -mno-red-zone -mgeneral-regs-only -mcmodel=kernel $(INCLUDE_FLAGS)
 ASFLAGS = --64
