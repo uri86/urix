@@ -271,6 +271,7 @@ int main(void)
 
     while (1)
     {
+        print("\x1b[?25h");
         print_cwd_prompt();
 
         int len = readline(buf, sizeof(buf));
