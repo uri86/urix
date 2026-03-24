@@ -275,7 +275,7 @@ typedef struct
 
 static void ab_append(abuf_t *ab, const char *s, int len)
 {
-    if (ab->len + len >= sizeof(ab->b))
+    if ((unsigned long)(ab->len + len) >= sizeof(ab->b))
     {
         write(STDOUT_FILENO, ab->b, ab->len);
         ab->len = 0;
@@ -286,7 +286,7 @@ static void ab_append(abuf_t *ab, const char *s, int len)
 
 static void ab_putchar(abuf_t *ab, char c)
 {
-    if (ab->len >= sizeof(ab->b))
+    if ((unsigned long)ab->len >= sizeof(ab->b))
     {
         write(STDOUT_FILENO, ab->b, ab->len);
         ab->len = 0;
@@ -340,7 +340,7 @@ static void render_screen(editor_t *ed)
 
             int j = 0;
             size_t llen = strlen(line);
-            for (; j < llen && j < SCREEN_WIDTH - 4; j++)
+            for (; (size_t)j < llen && j < SCREEN_WIDTH - 4; j++)
             {
                 ab_putchar(&ab, line[j]);
             }
