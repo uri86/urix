@@ -36,4 +36,14 @@ void delay_ms(uint32_t ms);
  */
 void halt(void);
 
+/**
+ * read_cr3 - returns the current value inside the cr3 register
+ */
+uint64_t read_cr3(void);
+
+/**
+ * write_cr3 - takes a uint64_t value and writes it into the cr3 register
+ */
+void write_cr3(uint64_t value);
+
 #endif /* UTILS_H */

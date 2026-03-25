@@ -8,7 +8,7 @@
 #include <lib/print.h>
 #include <string.h>
 #include <lib/panic.h>
-
+#include <lib/utils.h>
 /*
  * Global kernel address space
  * All processes copy kernel mappings from this space
@@ -97,8 +97,7 @@ void vmm_init(void)
      * Read current CR3
      * This is the identity-mapped PML4 created by PMM during boot
      */
-    uint64_t current_pml4_phys;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(current_pml4_phys));
+    uint64_t current_pml4_phys = read_cr3();
     kprintf("Current PML4 (identity): %llx\n", current_pml4_phys);
 
     /*
@@ -164,7 +163,7 @@ void vmm_init(void)
      * After this, we have BOTH identity and higher-half mappings active
      */
     kprintf("Switching to new page tables (CR3 = %llx)...\n", kernel_space.pml4_phys);
-    __asm__ volatile("mov %0, %%cr3" : : "r"(kernel_space.pml4_phys) : "memory");
+    write_cr3(kernel_space.pml4_phys);
     current_space = &kernel_space;
 
     kprintf("Page tables switched successfully\n");
@@ -200,7 +199,7 @@ void vmm_finish_init(void)
     }
 
     // Flush TLB (reload CR3) - use the PHYSICAL address for CR3
-    __asm__ volatile("mov %0, %%cr3" : : "r"(kernel_space.pml4_phys) : "memory");
+    write_cr3(kernel_space.pml4_phys);
 
     in_higher_half = 1;
 
@@ -376,7 +375,7 @@ void vmm_switch_address_space(address_space_t *as)
         as = &kernel_space;
 
     /* Load PML4 into CR3 */
-    __asm__ volatile("mov %0, %%cr3" : : "r"(as->pml4_phys) : "memory");
+    write_cr3(as->pml4_phys);
     current_space = as;
 }
 
@@ -504,8 +503,7 @@ void vmm_map_kernel_page(uint64_t virt, uint64_t phys)
 
     vmm_map_page(kernel_as, virt, phys, VMM_KERNEL_FLAGS);
 
-    uint64_t current_cr3;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(current_cr3));
+    uint64_t current_cr3 = read_cr3();
 
     if (current_cr3 != kernel_as->pml4_phys)
         vmm_map_page(NULL, virt, phys, VMM_KERNEL_FLAGS);
@@ -517,8 +515,7 @@ void vmm_unmap_kernel_page(uint64_t virt)
 
     uint64_t phys = vmm_unmap_page(kernel_as, virt);
 
-    uint64_t current_cr3;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(current_cr3));
+    uint64_t current_cr3 = read_cr3();
 
     if (current_cr3 != kernel_as->pml4_phys)
         vmm_unmap_page(NULL, virt);

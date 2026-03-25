@@ -27,6 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <lib/panic.h>
+#include <lib/utils.h>
 
 /* linker-provided kernel boundaries */
 extern char _kernel_start;
@@ -426,8 +427,7 @@ void pmm_init(multiboot_size_tag *s)
 
     uint64_t new_pml4_phys = identity_map_all(EARLY_MAP_LIMIT, pt_reserve_start, pt_reserve_end);
 
-    uint64_t old_pml4_phys;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(old_pml4_phys));
+    uint64_t old_pml4_phys = read_cr3();
 
     uint64_t *old_pml4 = (uint64_t *)old_pml4_phys;
     uint64_t *new_pml4 = (uint64_t *)new_pml4_phys;
@@ -445,7 +445,7 @@ void pmm_init(multiboot_size_tag *s)
 
     kprintf("Identity map created, PML4 at %llx\n", new_pml4);
     kprintf("Switching to new page tables (CR3 = %llx)...\n", new_pml4);
-    __asm__ volatile("mov %0, %%cr3" : : "r"(new_pml4));
+    write_cr3((uint64_t)new_pml4);
     kprintf("CR3 switched successfully\n");
 
     /* Find bitmap region */
