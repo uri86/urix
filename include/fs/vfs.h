@@ -65,7 +65,8 @@ struct vnode
     uint8_t type;
     uint64_t size;
     uint32_t refcount;
-    mount_t *mount;
+    mount_t *mount; // The filesystem this node belongs to
+    mount_t *mounted_here; // A filesystem mounted over this directory
     void *fs_data; /* Filesystem specific data */
     struct vfs_ops *ops;
 };

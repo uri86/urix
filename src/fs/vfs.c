@@ -11,6 +11,9 @@
 static filesystem_t *filesystems = NULL;
 static mount_t *root_mount = NULL;
 
+static void vfs_vnode_put(vnode_t *node);
+static int vfs_resolve(const char *path, vnode_t **out);
+
 void vfs_init(void)
 {
     kprintf("\n=== VFS Init ===\n");
@@ -62,6 +65,30 @@ int vfs_mount(const char *fstype, const char *dev, const char *mountpoint)
         if (root_mount->root)
             root_mount->root->refcount = 1;
         debug_kprintf("VFS: Set root mount to %s\n", dev);
+    }
+    else
+    {
+        /* If this is a sub-mount, attach it to the target directory vnode */
+        vnode_t *mount_node = NULL;
+        if (vfs_resolve(mountpoint, &mount_node) == 0 && mount_node)
+        {
+            if (mount_node->type == VFS_DIR)
+            {
+                mount_node->mounted_here = m;
+                debug_kprintf("VFS: Attached mount to node %lu for %s\n", mount_node->inode, mountpoint);
+                // Mount node refcount is lowered to preserve the node in memory.
+            }
+            else
+            {
+                vfs_vnode_put(mount_node);
+                debug_kprintf("VFS: Error - cannot mount on non-directory '%s'\n", mountpoint);
+                return -1;
+            }
+        }
+        else
+        {
+            debug_kprintf("VFS: Warning - mount point '%s' not found or invalid\n", mountpoint);
+        }
     }
 
     debug_kprintf("VFS: Mounted %s on %s (type: %s)\n", dev, mountpoint, fstype);
@@ -172,6 +199,15 @@ static int vfs_resolve(const char *path, vnode_t **out)
             debug_kprintf("VFS: lookup returned NULL for component '%s'\n", component);
             vfs_vnode_put(current);
             return -1;
+        }
+
+        /* Check if the resolved node is a mount point */
+        if (next->mounted_here && next->mounted_here->root)
+        {
+            vnode_t *mnt_root = next->mounted_here->root;
+            vfs_vnode_get(mnt_root);
+            vfs_vnode_put(next);
+            next = mnt_root;
         }
 
         vfs_vnode_put(current);
