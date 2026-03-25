@@ -10,8 +10,8 @@
 #include <memory/kmalloc.h>
 #include <memory/physical/pmm.h>
 #include <lib/print.h>
-#include <string.h>
 #include <lib/panic.h>
+#include <string.h>
 #include <fs/elf.h>
 #include <cpu/gdt.h>
 
@@ -78,6 +78,133 @@ static process_t *dequeue_highest_priority(void)
     return NULL;
 }
 
+static void remove_from_ready_queue(process_t *p)
+{
+    ready_queue_t *q = &ready_queues[p->effective_priority];
+    process_t *prev = NULL;
+    process_t *curr = q->head;
+
+    while (curr)
+    {
+        if (curr == p)
+        {
+            if (prev)
+                prev->next_in_queue = curr->next_in_queue;
+            else
+                q->head = curr->next_in_queue;
+
+            if (q->tail == curr)
+                q->tail = prev;
+
+            q->count--;
+            curr->next_in_queue = NULL;
+            break;
+        }
+        prev = curr;
+        curr = curr->next_in_queue;
+    }
+}
+
+static void remove_from_all_processes(process_t *p)
+{
+    if (all_processes == p)
+    {
+        all_processes = p->next_all;
+    }
+    else
+    {
+        process_t *prev = all_processes;
+        while (prev && prev->next_all != p)
+        {
+            prev = prev->next_all;
+        }
+        if (prev)
+        {
+            prev->next_all = p->next_all;
+        }
+    }
+    total_processes--;
+}
+
+static void register_process(process_t *proc)
+{
+    enqueue(proc);
+    proc->next_all = all_processes;
+    all_processes = proc;
+    total_processes++;
+}
+
+static void cleanup_process_resources(process_t *p)
+{
+    if (p->fd_table)
+        fd_table_destroy(p->fd_table);
+    if (p->addr_space)
+        vmm_destroy_address_space(p->addr_space);
+    if (p->kernel_stack_phys)
+        pmm_free_frame(p->kernel_stack_phys);
+    kfree(p);
+}
+
+static process_t *alloc_process(const char *name, process_priority_t priority, process_privilege_t privilege)
+{
+    process_t *proc = (process_t *)kmalloc(sizeof(process_t));
+    if (!proc)
+        return NULL;
+
+    memset(proc, 0, sizeof(process_t));
+
+    process_t *current = process_get_current();
+    if (current)
+        strncpy(proc->cwd, current->cwd, sizeof(proc->cwd));
+    else
+        strcpy(proc->cwd, "/");
+
+    /* Setup identity */
+    proc->pid = next_pid++;
+    proc->parent_pid = current ? current->pid : 0;
+    proc->exit_status = 0;
+    proc->is_zombie = 0;
+    strncpy(proc->name, name, 31);
+    proc->priority = priority;
+    proc->effective_priority = priority;
+    proc->privilege = privilege;
+    proc->state = PROCESS_STATE_READY;
+    proc->time_slice_remaining = TIME_SLICE;
+
+    /* Create address space */
+    proc->addr_space = vmm_create_address_space();
+    if (!proc->addr_space)
+    {
+        kfree(proc);
+        return NULL;
+    }
+
+    /* Allocate kernel stack */
+    proc->kernel_stack_phys = pmm_alloc_frame();
+    if (!proc->kernel_stack_phys)
+    {
+        vmm_destroy_address_space(proc->addr_space);
+        kfree(proc);
+        return NULL;
+    }
+
+    /* Map kernel stack */
+    proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
+    vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
+                 proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
+
+    proc->fd_table = fd_table_create();
+    if (!proc->fd_table)
+    {
+        vmm_destroy_address_space(proc->addr_space);
+        pmm_free_frame(proc->kernel_stack_phys);
+        kfree(proc);
+        return NULL;
+    }
+
+    return proc;
+}
+
 static void idle_process(void)
 {
     while (1)
@@ -108,65 +235,17 @@ void process_init(void)
     kprintf("================================\n\n");
 }
 
-int process_create(uint64_t entry_point, const char *name,
-                   process_priority_t priority, process_privilege_t privilege)
+int process_create(uint64_t entry_point, const char *name, process_priority_t priority, process_privilege_t privilege)
 {
     if (!entry_point || priority > PRIORITY_REALTIME)
     {
         return -1;
     }
 
-    process_t *proc = (process_t *)kmalloc(sizeof(process_t));
+    process_t *proc = alloc_process(name, priority, privilege);
     if (!proc)
     {
         debug_kprintf("Failed to allocate PCB for '%s'\n", name);
-        return -1;
-    }
-
-    memset(proc, 0, sizeof(process_t));
-    strcpy(proc->cwd, "/");
-
-    /* Setup identity */
-    proc->pid = next_pid++;
-    process_t *current = process_get_current();
-    proc->parent_pid = current ? current->pid : 0;
-    proc->exit_status = 0;
-    proc->is_zombie = 0;
-    strncpy(proc->name, name, 31);
-    proc->priority = priority;
-    proc->effective_priority = priority;
-    proc->privilege = privilege;
-    proc->state = PROCESS_STATE_READY;
-    proc->time_slice_remaining = TIME_SLICE;
-
-    /* Create address space */
-    proc->addr_space = vmm_create_address_space();
-    if (!proc->addr_space)
-    {
-        kfree(proc);
-        return -1;
-    }
-
-    /* Allocate kernel stack */
-    proc->kernel_stack_phys = pmm_alloc_frame();
-    if (!proc->kernel_stack_phys)
-    {
-        vmm_destroy_address_space(proc->addr_space);
-        kfree(proc);
-        return -1;
-    }
-
-    /* Map kernel stack */
-    proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
-    vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
-                 proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
-
-    proc->fd_table = fd_table_create();
-    if (!proc->fd_table)
-    {
-        vmm_destroy_address_space(proc->addr_space);
-        pmm_free_frame(proc->kernel_stack_phys);
-        kfree(proc);
         return -1;
     }
 
@@ -202,17 +281,10 @@ int process_create(uint64_t entry_point, const char *name,
 
     proc->context.rbp = proc->context.rsp;
 
-    /* Add to ready queue */
-    enqueue(proc);
+    /* Register process */
+    register_process(proc);
 
-    /* Add to all processes list */
-    proc->next_all = all_processes;
-    all_processes = proc;
-
-    total_processes++;
-
-    debug_kprintf("Created process '%s' (PID %u, Pri %d, Ring %d)\n",
-                  proc->name, proc->pid, proc->priority, proc->privilege);
+    debug_kprintf("Created process '%s' (PID %u, Pri %d, Ring %d)\n", proc->name, proc->pid, proc->priority, proc->privilege);
 
     return proc->pid;
 }
@@ -232,8 +304,7 @@ static int process_alloc_user_stack(address_space_t *addr_space)
             return -1;
         }
 
-        if (vmm_map_page(addr_space, vaddr, phys,
-                         VMM_USER | VMM_WRITE | VMM_PRESENT) != 0)
+        if (vmm_map_page(addr_space, vaddr, phys, VMM_USER | VMM_WRITE | VMM_PRESENT) != 0)
         {
             debug_kprintf("[ERROR] process_alloc_user_stack: vmm_map_page failed at %lx\n", vaddr);
             pmm_free_frame(phys);
@@ -256,58 +327,10 @@ int process_load_elf(const char *name, const void *elf_data,
     debug_kprintf("[DEBUG] process_load_elf: Loading '%s' (%lu bytes)\n",
                   name, elf_size);
 
-    /* Allocate and zero the PCB */
-    process_t *proc = (process_t *)kmalloc(sizeof(process_t));
+    process_t *proc = alloc_process(name, priority, PROCESS_USER);
     if (!proc)
     {
         kprintf("[ERROR] Failed to allocate PCB for '%s'\n", name);
-        return -1;
-    }
-    memset(proc, 0, sizeof(process_t));
-
-    /* Identity */
-    proc->pid = next_pid++;
-    process_t *current = process_get_current();
-    proc->parent_pid = current ? current->pid : 0;
-    proc->exit_status = 0;
-    proc->is_zombie = 0;
-    strncpy(proc->name, name, 31);
-    proc->priority = priority;
-    proc->effective_priority = priority;
-    proc->privilege = PROCESS_USER;
-    proc->state = PROCESS_STATE_READY;
-    proc->time_slice_remaining = TIME_SLICE;
-
-    /* Address space */
-    proc->addr_space = vmm_create_address_space();
-    if (!proc->addr_space)
-    {
-        kprintf("[ERROR] Failed to create address space for '%s'\n", name);
-        kfree(proc);
-        return -1;
-    }
-
-    /* Kernel stack */
-    proc->kernel_stack_phys = pmm_alloc_frame();
-    if (!proc->kernel_stack_phys)
-    {
-        kprintf("[ERROR] Failed to allocate kernel stack for '%s'\n", name);
-        vmm_destroy_address_space(proc->addr_space);
-        kfree(proc);
-        return -1;
-    }
-    proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
-    vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
-                 proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
-
-    /* File descriptor table */
-    proc->fd_table = fd_table_create();
-    if (!proc->fd_table)
-    {
-        kprintf("[ERROR] Failed to create FD table for '%s'\n", name);
-        vmm_destroy_address_space(proc->addr_space);
-        pmm_free_frame(proc->kernel_stack_phys);
-        kfree(proc);
         return -1;
     }
 
@@ -365,10 +388,7 @@ int process_load_elf(const char *name, const void *elf_data,
     proc->user_stack = USER_STACK_TOP;
 
     /* Register with scheduler and process list */
-    enqueue(proc);
-    proc->next_all = all_processes;
-    all_processes = proc;
-    total_processes++;
+    register_process(proc);
 
     kprintf("[SUCCESS] Loaded '%s' (PID %u, entry=%lx)\n",
             proc->name, proc->pid, elf_info.entry_point);
@@ -511,11 +531,8 @@ int process_fork(void)
     }
 
     /* add to process list and queue */
-    enqueue(child);
-    child->next_all = all_processes;
-    all_processes = child;
-    total_processes++;
     child->parent_pid = parent->pid;
+    register_process(child);
 
     debug_kprintf("fork: successfully created child PID %u from parent PID %u\n",
                   child->pid, parent->pid);
@@ -569,6 +586,7 @@ void process_exit(int exit_code)
     process_schedule();
 
     PANIC("Returned from schedule in process_exit");
+    while (1);
 }
 
 int process_wait(int *status)
@@ -611,31 +629,8 @@ int process_wait(int *status)
             uint32_t child_pid = zombie_child->pid;
             int child_status = zombie_child->exit_status;
 
-            /* Remove from all_processes list */
-            if (all_processes == zombie_child)
-            {
-                all_processes = zombie_child->next_all;
-            }
-            else
-            {
-                process_t *prev = all_processes;
-                while (prev && prev->next_all != zombie_child)
-                    prev = prev->next_all;
-                if (prev)
-                    prev->next_all = zombie_child->next_all;
-            }
-
-            total_processes--;
-
-            /* Free all resources */
-            if (zombie_child->fd_table)
-                fd_table_destroy(zombie_child->fd_table);
-            if (zombie_child->addr_space)
-                vmm_destroy_address_space(zombie_child->addr_space);
-            if (zombie_child->kernel_stack_phys)
-                pmm_free_frame(zombie_child->kernel_stack_phys);
-
-            kfree(zombie_child);
+            remove_from_all_processes(zombie_child);
+            cleanup_process_resources(zombie_child);
 
             /* Return status to parent */
             if (status)
@@ -686,25 +681,7 @@ void process_schedule(void)
         {
             debug_kprintf("Cleaning up terminated process '%s' (PID %u)\n", old->name, old->pid);
 
-            if (all_processes == old)
-            {
-                all_processes = old->next_all;
-            }
-            else
-            {
-                process_t *p = all_processes;
-                while (p && p->next_all != old)
-                    p = p->next_all;
-                if (p)
-                    p->next_all = old->next_all;
-            }
-
-            total_processes--;
-
-            address_space_t *old_space = old->addr_space;
-            uint64_t old_stack = old->kernel_stack_phys;
-            fd_table_t *old_fdt = old->fd_table;
-            process_t *old_proc = old;
+            remove_from_all_processes(old);
 
             process_t *new = dequeue_highest_priority();
             if (!new)
@@ -722,14 +699,8 @@ void process_schedule(void)
 
             vmm_switch_address_space(new->addr_space);
             gdt_set_kernel_stack(new->kernel_stack_virt + PAGE_SIZE);
-            if (old_fdt)
-                fd_table_destroy(old_fdt);
-            if (old_space)
-                vmm_destroy_address_space(old_space);
-            if (old_stack)
-                pmm_free_frame(old_stack);
 
-            kfree(old_proc);
+            cleanup_process_resources(old);
 
             process_context_switch(NULL, &new->context);
 
@@ -846,59 +817,14 @@ int process_kill(uint32_t pid)
     __asm__ volatile("cli");
 
     // Remove from ready queue if present
-    ready_queue_t *q = &ready_queues[p->effective_priority];
-    process_t *rq_prev = NULL;
-    process_t *rq = q->head;
-
-    while (rq)
-    {
-        if (rq == p)
-        {
-            if (rq_prev)
-                rq_prev->next_in_queue = rq->next_in_queue;
-            else
-                q->head = rq->next_in_queue;
-
-            if (q->tail == rq)
-                q->tail = rq_prev;
-
-            q->count--;
-            break;
-        }
-
-        rq_prev = rq;
-        rq = rq->next_in_queue;
-    }
+    remove_from_ready_queue(p);
 
     /* Remove from all_processes list */
-    process_t *prev = NULL;
-    process_t *ap = all_processes;
-
-    while (ap && ap != p)
-    {
-        prev = ap;
-        ap = ap->next_all;
-    }
-
-    if (ap)
-    {
-        if (prev)
-            prev->next_all = p->next_all;
-        else
-            all_processes = p->next_all;
-    }
-
-    total_processes--;
+    remove_from_all_processes(p);
     __asm__ volatile("sti");
 
     /* Cleanup resources */
-    if (p->addr_space)
-        vmm_destroy_address_space(p->addr_space);
-
-    if (p->kernel_stack_phys)
-        pmm_free_frame(p->kernel_stack_phys);
-
-    kfree(p);
+    cleanup_process_resources(p);
 
     return 0;
 }
@@ -927,28 +853,7 @@ void process_timer_tick(void)
                               p->effective_priority + 1, p->wait_time);
 
                 /* Remove from current queue */
-                ready_queue_t *old_q = &ready_queues[p->effective_priority];
-                if (old_q->head == p)
-                {
-                    old_q->head = p->next_in_queue;
-                    if (!old_q->head)
-                        old_q->tail = NULL;
-                    old_q->count--;
-                }
-                else
-                {
-                    /* Find and remove from queue */
-                    process_t *prev = old_q->head;
-                    while (prev && prev->next_in_queue != p)
-                        prev = prev->next_in_queue;
-                    if (prev)
-                    {
-                        prev->next_in_queue = p->next_in_queue;
-                        if (old_q->tail == p)
-                            old_q->tail = prev;
-                        old_q->count--;
-                    }
-                }
+                remove_from_ready_queue(p);
 
                 /* Boost priority and re-enqueue */
                 p->effective_priority++;
