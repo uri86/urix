@@ -119,8 +119,6 @@ void keyboard_test_process(void)
     process_exit(0);
 }
 
-
-
 void load_userspace_binaries(void)
 {
     kprintf("=== Loading Userspace Programs ===\n");
