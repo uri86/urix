@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include "../liburix/conf.h"
 #include "string.h"
+#include "auth.h"
 
 #define MAX_LINES 1024
 #define MAX_LINE_LEN 512
@@ -520,6 +521,13 @@ int main(int argc, char *argv[])
     }
 
     strcpy(g_filename, argv[1]);
+
+    if (is_session_file(g_filename)) {
+        println("Access denied: Session file cannot be manually edited.");
+        exit(1);
+    }
+    
+    require_root_for_ps(g_filename);
 
     /* Initialize editor */
     g_editor.cursor_line = 0;

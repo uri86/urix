@@ -4,8 +4,11 @@
  */
 #include <urix.h>
 #include <string.h>
+#include "auth.h"
+
 void main(int argc, char **argv)
 {
+    require_root();
     if (argc < 2)
     {
         println("Usage: prntpcb <pid>");

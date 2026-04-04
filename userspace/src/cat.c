@@ -4,6 +4,7 @@
  * Usage: cat [-n] <file> [file2 ...]
  */
 #include <urix.h>
+#include "auth.h"
 
 #define BUF_SIZE 512
 #ifndef O_RDONLY
@@ -71,6 +72,7 @@ static int cat_fd(int fd, int number_lines, int *line_num, int *at_line_start)
 }
 static int cat_file(const char *path, int number_lines, int *line_num, int *at_line_start)
 {
+    require_root_for_ps(path);
     int fd = open(path, O_RDONLY);
     if (fd < 0)
     {

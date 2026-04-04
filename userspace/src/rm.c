@@ -4,6 +4,8 @@
  * Usage: rm [-r] [-f] <path> [path2 ...]
  */
 #include <urix.h>
+#include <string.h>
+#include "auth.h"
 
 static int flag_r = 0;
 static int flag_f = 0;
@@ -63,6 +65,13 @@ static int rm_dir(const char *path)
 
 static int do_rm(const char *path)
 {
+    if (strcmp(path, "/") == 0 && flag_r) {
+        if (!is_locked_command_allowed()) {
+            println("rm: it is dangerous to operate recursively on '/' without root privileges.");
+            return 1;
+        }
+    }
+
     /* try unlink */
     int r = unlink(path);
     if (r == 0)

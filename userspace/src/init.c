@@ -1,6 +1,6 @@
 /**
  * Licensed under MIT License - URIX project
- * init.c - init process for userspace, loads the shell
+ * init.c - init process for userspace, loads the login program
  */
 
 #include <urix.h>
@@ -14,12 +14,14 @@ int main(void)
         int pid = fork();
         if (pid > 0)
         {
-            wait(NULL);
-            println("Restating the shell");
+            int status;
+            wait(&status);
+            println("Restarting the login process");
+            yield();
         }
         else
         {
-            exec("/bin/shell", NULL);
+            exec("/bin/login", NULL);
             exit(1);
         }
     }
