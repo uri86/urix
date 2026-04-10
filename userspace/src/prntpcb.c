@@ -4,7 +4,7 @@
  */
 #include <urix.h>
 #include <string.h>
-#include "auth.h"
+#include <auth.h>
 
 void main(int argc, char **argv)
 {

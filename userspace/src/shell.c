@@ -9,8 +9,8 @@
 #include "urix.h"
 #include <stdio.h>
 #include "../liburix/conf.h"
-#include "string.h"
-#include "auth.h"
+#include <string.h>
+#include <auth.h>
 
 #define MAX_ARGS 16
 #define BUF_SIZE 256

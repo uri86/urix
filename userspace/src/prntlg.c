@@ -2,8 +2,8 @@
  * Licensed under MIT License - URIX project
  * prntlg.c - print kernel log
  */
-#include "urix.h"
-#include "auth.h"
+#include <urix.h>
+#include <auth.h>
 #include "../liburix/conf.h"
 
 #define SHELL_CONF "/etc/shell.conf"

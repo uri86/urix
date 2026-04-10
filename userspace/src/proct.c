@@ -2,8 +2,8 @@
  * Licensed under MIT License - URIX project
  * proct.c - print process table
  */
-#include "urix.h"
-#include "auth.h"
+#include <urix.h>
+#include <auth.h>
 
 int main()
 {

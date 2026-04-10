@@ -2,8 +2,8 @@
  * Licensed under MIT License - URIX project
  * login.c - Login program
  */
-#include "urix.h"
-#include "string.h"
+#include <urix.h>
+#include <string.h>
 
 #define PASSWD_FILE "/etc/passwd.ps"
 #define SESSION_FILE "/etc/session_user"
@@ -81,6 +81,7 @@ static int check_login(const char *username, const char *password) {
 int main(void) {
     init_passwd_if_missing();
     clear_screen();
+    change_terminal_color(7, 0); // change screen color to light gray on black
     
     char username[64];
     char password[64];

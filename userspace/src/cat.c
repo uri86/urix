@@ -4,7 +4,7 @@
  * Usage: cat [-n] <file> [file2 ...]
  */
 #include <urix.h>
-#include "auth.h"
+#include <auth.h>
 
 #define BUF_SIZE 512
 #ifndef O_RDONLY

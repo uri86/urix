@@ -5,7 +5,7 @@
  */
 #include <urix.h>
 #include <string.h>
-#include "auth.h"
+#include <auth.h>
 
 static int flag_r = 0;
 static int flag_f = 0;

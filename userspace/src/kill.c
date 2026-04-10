@@ -2,8 +2,8 @@
  * Licensed under MIT License - URIX project
  * kill.c - kill a process
  */
-#include "urix.h"
-#include "auth.h"
+#include <urix.h>
+#include <auth.h>
 
 int main(int argc, char **argv)
 {

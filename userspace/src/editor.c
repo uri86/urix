@@ -15,8 +15,8 @@
 #include <urix.h>
 #include <stdio.h>
 #include "../liburix/conf.h"
-#include "string.h"
-#include "auth.h"
+#include <string.h>
+#include <auth.h>
 
 #define MAX_LINES 1024
 #define MAX_LINE_LEN 512
