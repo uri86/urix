@@ -10,6 +10,7 @@
 
 static filesystem_t *filesystems = NULL;
 static mount_t *root_mount = NULL;
+static mount_t *vfs_mount_list = NULL;
 
 static void vfs_vnode_put(vnode_t *node);
 static int vfs_resolve(const char *path, vnode_t **out);
@@ -19,6 +20,7 @@ void vfs_init(void)
     kprintf("\n=== VFS Init ===\n");
     filesystems = NULL;
     root_mount = NULL;
+    vfs_mount_list = NULL;
 }
 
 int vfs_register_fs(filesystem_t *fs)
@@ -65,6 +67,8 @@ int vfs_mount(const char *fstype, const char *dev, const char *mountpoint)
         if (root_mount->root)
             root_mount->root->refcount = 1;
         debug_kprintf("VFS: Set root mount to %s\n", dev);
+        m->parent_inode = 0;
+        m->parent_mount = NULL;
     }
     else
     {
@@ -75,6 +79,8 @@ int vfs_mount(const char *fstype, const char *dev, const char *mountpoint)
             if (mount_node->type == VFS_DIR)
             {
                 mount_node->mounted_here = m;
+                m->parent_inode = mount_node->inode;
+                m->parent_mount = mount_node->mount;
                 debug_kprintf("VFS: Attached mount to node %lu for %s\n", mount_node->inode, mountpoint);
                 // Mount node refcount is lowered to preserve the node in memory.
             }
@@ -90,6 +96,9 @@ int vfs_mount(const char *fstype, const char *dev, const char *mountpoint)
             debug_kprintf("VFS: Warning - mount point '%s' not found or invalid\n", mountpoint);
         }
     }
+
+    m->next = vfs_mount_list;
+    vfs_mount_list = m;
 
     debug_kprintf("VFS: Mounted %s on %s (type: %s)\n", dev, mountpoint, fstype);
     return 0;
@@ -208,6 +217,22 @@ static int vfs_resolve(const char *path, vnode_t **out)
             vfs_vnode_get(mnt_root);
             vfs_vnode_put(next);
             next = mnt_root;
+        }
+        else
+        {
+            mount_t *mnt = vfs_mount_list;
+            while (mnt)
+            {
+                if (mnt->parent_inode == next->inode && mnt->parent_mount == next->mount && mnt->root)
+                {
+                    vnode_t *mnt_root = mnt->root;
+                    vfs_vnode_get(mnt_root);
+                    vfs_vnode_put(next);
+                    next = mnt_root;
+                    break;
+                }
+                mnt = mnt->next;
+            }
         }
 
         vfs_vnode_put(current);

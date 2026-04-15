@@ -92,6 +92,10 @@ struct mount
     void *fs_data; /* FS specific mount data */
     char *mountpoint;
     mount_t *next;
+    
+    // enables to cross mount boundaries
+    uint64_t parent_inode; 
+    struct mount *parent_mount;
 };
 
 /*

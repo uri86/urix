@@ -121,6 +121,7 @@ static int load_file(editor_t *ed, const char *filename)
     int fd = open(filename, O_RDONLY);
     if (fd < 0)
     {
+        println("File not found, creating new file");
         /* File doesn't exist, create empty one */
         ed->num_lines = 1;
         ed->lines[0][0] = '\0';

@@ -261,12 +261,15 @@ static long sys_open(const char *path, int flags)
     }
 
     uint32_t vfs_flags = 0;
-    if (flags & O_RDONLY)
+    int acc_mode = flags & 3;
+
+    if (acc_mode == O_RDONLY)
         vfs_flags |= VFS_READ;
-    if (flags & O_WRONLY)
+    else if (acc_mode == O_WRONLY)
         vfs_flags |= VFS_WRITE;
-    if (flags & O_RDWR)
+    else if (acc_mode == O_RDWR)
         vfs_flags |= VFS_READ | VFS_WRITE;
+
     if (flags & O_CREAT)
         vfs_flags |= VFS_CREATE;
     if (flags & O_TRUNC)
