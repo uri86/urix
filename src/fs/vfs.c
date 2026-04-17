@@ -7,6 +7,8 @@
 #include <memory/kmalloc.h>
 #include <string.h>
 #include <lib/print.h>
+#include <process/process.h>
+#include <syscall/syscall.h>
 
 static filesystem_t *filesystems = NULL;
 static mount_t *root_mount = NULL;
@@ -716,4 +718,89 @@ int64_t vfs_seek(file_t *f, int64_t offset, int whence)
 
     f->offset = new_offset;
     return new_offset;
+}
+
+int vfs_resolve_path(const char *path, char *out_path)
+{
+    process_t *current = process_get_current();
+    if (!path || !out_path)
+        return -EINVAL;
+
+    char temp[512];
+    if (path[0] == '/')
+    {
+        strncpy(temp, path, 511);
+    }
+    else
+    {
+        strncpy(temp, current->cwd, 511);
+        size_t len = strlen(temp);
+        if (len > 0 && temp[len - 1] != '/')
+        {
+            if (len < 511)
+            {
+                temp[len] = '/';
+                temp[len + 1] = '\0';
+            }
+        }
+        size_t remain = 511 - strlen(temp);
+        strncpy(temp + strlen(temp), path, remain);
+    }
+    temp[511] = '\0';
+
+    /* handle .. and . cases */
+    char *tokens[64];
+    int count = 0;
+
+    char *p = temp;
+    while (*p)
+    {
+        while (*p == '/')
+            p++; // skip redundant slashes
+        if (*p == '\0')
+            break;
+
+        char *start = p;
+        while (*p && *p != '/')
+            p++;
+
+        if (*p)
+        {
+            *p = '\0';
+            p++;
+        }
+
+        if (strcmp(start, ".") == 0)
+        {
+            continue; // ignore current directory references
+        }
+        else if (strcmp(start, "..") == 0)
+        {
+            if (count > 0)
+                count--; // go up one directory
+        }
+        else
+        {
+            if (count < 64)
+            {
+                tokens[count++] = start;
+            }
+        }
+    }
+
+    // reconstruct the resolved path
+    out_path[0] = '\0';
+    if (count == 0)
+    {
+        strcpy(out_path, "/");
+    }
+    else
+    {
+        for (int i = 0; i < count; i++)
+        {
+            strcat(out_path, "/");
+            strcat(out_path, tokens[i]);
+        }
+    }
+    return 0;
 }

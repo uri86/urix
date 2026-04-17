@@ -129,6 +129,7 @@ int64_t vfs_seek(file_t *f, int64_t offset, int whence);
 #define VFS_SEEK_END 2 /* Relative to end */
 
 /* Directory Operations */
+int vfs_resolve_path(const char *path, char *out_path);
 int vfs_mkdir(const char *path);
 int vfs_unlink(const char *path);
 int vfs_rmdir(const char *path);

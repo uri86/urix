@@ -25,90 +25,7 @@
 
 extern void syscall_entry(void);
 
-static int resolve_path(const char *path, char *out_path)
-{
-    process_t *current = process_get_current();
-    if (!path || !out_path)
-        return -EINVAL;
 
-    char temp[512];
-    if (path[0] == '/')
-    {
-        strncpy(temp, path, 511);
-    }
-    else
-    {
-        strncpy(temp, current->cwd, 511);
-        size_t len = strlen(temp);
-        if (len > 0 && temp[len - 1] != '/')
-        {
-            if (len < 511)
-            {
-                temp[len] = '/';
-                temp[len + 1] = '\0';
-            }
-        }
-        size_t remain = 511 - strlen(temp);
-        strncpy(temp + strlen(temp), path, remain);
-    }
-    temp[511] = '\0';
-
-    /* Normalize path (handle '.' and '..') */
-    char *tokens[64];
-    int count = 0;
-
-    char *p = temp;
-    while (*p)
-    {
-        while (*p == '/')
-            p++; /* Skip redundant slashes */
-        if (*p == '\0')
-            break;
-
-        char *start = p;
-        while (*p && *p != '/')
-            p++;
-
-        if (*p)
-        {
-            *p = '\0';
-            p++;
-        }
-
-        if (strcmp(start, ".") == 0)
-        {
-            continue; /* Ignore '.' */
-        }
-        else if (strcmp(start, "..") == 0)
-        {
-            if (count > 0)
-                count--; /* Go back one directory */
-        }
-        else
-        {
-            if (count < 64)
-            {
-                tokens[count++] = start;
-            }
-        }
-    }
-
-    /* Reconstruct the absolute normalized path */
-    out_path[0] = '\0';
-    if (count == 0)
-    {
-        strcpy(out_path, "/");
-    }
-    else
-    {
-        for (int i = 0; i < count; i++)
-        {
-            strcat(out_path, "/");
-            strcat(out_path, tokens[i]);
-        }
-    }
-    return 0;
-}
 
 static long sys_exit(int status)
 {
@@ -225,7 +142,7 @@ static long sys_open(const char *path, int flags)
         return -EBADF;
 
     char abs_path[512];
-    if (resolve_path(path, abs_path) != 0)
+    if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
 
     int fd = fd_table_alloc(current->fd_table);
@@ -233,32 +150,6 @@ static long sys_open(const char *path, int flags)
         return -EMFILE;
 
     fd_entry_t *entry = &current->fd_table->fds[fd];
-
-    /* Special-case some /dev paths so they map to console I/O */
-    if (strcmp(abs_path, "/dev/console") == 0 || strcmp(abs_path, "/dev/tty") == 0 ||
-        strcmp(abs_path, "/dev/stdout") == 0)
-    {
-        entry->type = FD_TYPE_CONSOLE;
-        entry->flags = flags;
-        entry->console_type = 1;
-        return fd;
-    }
-
-    if (strcmp(abs_path, "/dev/stderr") == 0)
-    {
-        entry->type = FD_TYPE_CONSOLE;
-        entry->flags = flags;
-        entry->console_type = 2;
-        return fd;
-    }
-
-    if (strcmp(abs_path, "/dev/stdin") == 0 || strcmp(abs_path, "/dev/keyboard") == 0)
-    {
-        entry->type = FD_TYPE_CONSOLE;
-        entry->flags = flags;
-        entry->console_type = 0;
-        return fd;
-    }
 
     uint32_t vfs_flags = 0;
     int acc_mode = flags & 3;
@@ -366,7 +257,7 @@ static long sys_exec(const char *path, char *const argv[])
 
     /* copy path */
     char kpath[256];
-    if (resolve_path(path, kpath) != 0)
+    if (vfs_resolve_path(path, kpath) != 0)
         return -EINVAL;
     debug_kprintf("exec: '%s'\n", kpath);
 
@@ -514,7 +405,7 @@ static long sys_mkdir(const char *path, uint32_t mode)
 {
     (void)mode;
     char abs_path[512];
-    if (resolve_path(path, abs_path) != 0)
+    if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
     return vfs_mkdir(abs_path);
 }
@@ -522,7 +413,7 @@ static long sys_mkdir(const char *path, uint32_t mode)
 static long sys_rmdir(const char *path)
 {
     char abs_path[512];
-    if (resolve_path(path, abs_path) != 0)
+    if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
     return vfs_rmdir(abs_path);
 }
@@ -530,7 +421,7 @@ static long sys_rmdir(const char *path)
 static long sys_unlink(const char *path)
 {
     char abs_path[512];
-    if (resolve_path(path, abs_path) != 0)
+    if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
     return vfs_unlink(abs_path);
 }
@@ -632,7 +523,7 @@ static long sys_chdir(const char *path)
         return -ESRCH;
 
     char abs_path[512];
-    if (resolve_path(path, abs_path) != 0)
+    if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
 
     file_t *f = NULL;
@@ -664,6 +555,17 @@ static long sys_isatty(int fd)
 
     if (entry->type == FD_TYPE_CONSOLE)
         return 1;
+
+    if (entry->type == FD_TYPE_FILE && entry->vfs_file && entry->vfs_file->vnode)
+    {
+        if (entry->vfs_file->vnode->mount && entry->vfs_file->vnode->mount->fs)
+        {
+            if (strcmp(entry->vfs_file->vnode->mount->fs->name, "devfs") == 0)
+            {
+                return 1;
+            }
+        }
+    }
 
     return 0;
 }
