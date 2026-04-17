@@ -154,15 +154,25 @@ static void load_colors(uint64_t *fg, uint64_t *bg)
 
     if (conf_get(&cfg, "fg", val, sizeof(val)) == CONF_OK)
         *fg = (uint64_t)atoi(val);
+    else
+        conf_set(&cfg, "fg", "7");
 
     if (conf_get(&cfg, "bg", val, sizeof(val)) == CONF_OK)
         *bg = (uint64_t)atoi(val);
-        
+    else
+        conf_set(&cfg, "bg", "0");
+
     if (conf_get(&cfg, "pc", val, sizeof(val)) == CONF_OK)
         g_pc = (uint64_t)atoi(val);
+    else
+        conf_set(&cfg, "pc", "4");
         
     if (conf_get(&cfg, "rc", val, sizeof(val)) == CONF_OK)
         g_rc = (uint64_t)atoi(val);
+    else        
+        conf_set(&cfg, "rc", "4");
+    
+    conf_save(&cfg);
 }
 
 /*
