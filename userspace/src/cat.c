@@ -73,6 +73,10 @@ static int cat_fd(int fd, int number_lines, int *line_num, int *at_line_start)
 static int cat_file(const char *path, int number_lines, int *line_num, int *at_line_start)
 {
     require_root_for_ps(path);
+    if (is_session_file(path)) {
+        print("Access denied: cannot read session_user file.\n");
+        return 1;
+    }
     int fd = open(path, O_RDONLY);
     if (fd < 0)
     {
