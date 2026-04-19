@@ -804,3 +804,58 @@ int vfs_resolve_path(const char *path, char *out_path)
     }
     return 0;
 }
+
+int vfs_kp(int flag, long arg)
+{
+    process_t *current = process_get_current();
+
+    if (flag == KPVFST) {
+        const char *path = (const char *)(uintptr_t)arg;
+        if (!path || *path == '\0') {
+            kprintf("VFS trace: no path given\n");
+            return -EINVAL;
+        }
+        /* Find a mounted filesystem that implements trace_path */
+        mount_t *m = vfs_mount_list;
+        while (m) {
+            if (m->fs && m->fs->trace_path) {
+                m->fs->trace_path(m, path);
+                return 0;
+            }
+            m = m->next;
+        }
+        kprintf("VFS trace: no filesystem supports path tracing\n");
+        return -1;
+    }
+
+    if (flag == KPFSSTAT) {
+        mount_t *m = vfs_mount_list;
+        while (m) {
+            if (m->fs && m->fs->print_stats)
+                m->fs->print_stats(m);
+            m = m->next;
+        }
+        return 0;
+    }
+
+    if (flag == KPDIR || flag == KPFILEBLK) {
+        if (!current || !current->fd_table) return -EBADF;
+        fd_entry_t *entry = fd_table_get(current->fd_table, arg);
+        if (!entry || entry->type != FD_TYPE_FILE || !entry->vfs_file || !entry->vfs_file->vnode) {
+            kprintf("VFS: Invalid file descriptor %d\n", arg);
+            return -EBADF;
+        }
+
+        vnode_t *v = entry->vfs_file->vnode;
+        if (flag == KPDIR) {
+            if (v->ops && v->ops->print_dir) v->ops->print_dir(v);
+            else kprintf("VFS: Filesystem does not support directory info.\n");
+        } else {
+            if (v->ops && v->ops->print_blocks) v->ops->print_blocks(v);
+            else kprintf("VFS: Filesystem does not support block info.\n");
+        }
+        return 0;
+    }
+
+    return -1;
+}

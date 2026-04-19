@@ -53,6 +53,9 @@ struct vfs_ops
     int (*rmdir)(vnode_t *dir, const char *name);
     int (*truncate)(vnode_t *node);
     void (*release)(vnode_t *node);
+    // file system info and stats
+    void (*print_blocks)(vnode_t *node);
+    void (*print_dir)(vnode_t *node);
 };
 
 /*
@@ -79,6 +82,10 @@ struct filesystem
     char name[32];
     int (*mount)(const char *dev, mount_t **mnt);
     int (*unmount)(mount_t *mnt);
+    
+    // file system info and stats
+    void (*print_stats)(mount_t *mnt);
+    void (*trace_path)(mount_t *mnt, const char *path);
     filesystem_t *next;
 };
 
@@ -133,5 +140,8 @@ int vfs_resolve_path(const char *path, char *out_path);
 int vfs_mkdir(const char *path);
 int vfs_unlink(const char *path);
 int vfs_rmdir(const char *path);
+
+// syscall KP function
+int vfs_kp(int flag, long arg);
 
 #endif /* VFS_H */

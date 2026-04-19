@@ -20,10 +20,20 @@ static int ext2_write(vnode_t *node, const void *buf, size_t size, uint64_t offs
 static int ext2_readdir(vnode_t *node, dirent_t *dirent, uint64_t index);
 static int ext2_truncate(vnode_t *node);
 static void ext2_release(vnode_t *node);
+static int ext2_read_inode(ext2_mount_t *m, uint32_t ino, ext2_inode_t *out);
+static void ext2_print_stats(mount_t *mnt);
+static void ext2_print_blocks(vnode_t *node);
+static void ext2_print_dir(vnode_t *node);
+static void ext2_trace_path(mount_t *mnt, const char *path);
+
+static int read_fs_block(ext2_mount_t *m, uint32_t block, void *data);
 
 static filesystem_t ext2_fs = {
     .name = "ext2",
     .mount = ext2_mount,
+    .unmount = NULL,
+    .print_stats = ext2_print_stats,
+    .trace_path = ext2_trace_path,
     .next = NULL};
 
 static struct vfs_ops ext2_ops = {
@@ -36,11 +46,213 @@ static struct vfs_ops ext2_ops = {
     .unlink = ext2_unlink,
     .rmdir = ext2_rmdir,
     .truncate = ext2_truncate,
-    .release = ext2_release};
+    .release = ext2_release,
+    .print_blocks = ext2_print_blocks,
+    .print_dir = ext2_print_dir};
 
 void ext2_init(void)
 {
     vfs_register_fs(&ext2_fs);
+}
+
+static void ext2_print_stats(mount_t *mnt)
+{
+    ext2_mount_t *m = (ext2_mount_t *)mnt->fs_data;
+    kprintf("\n=== Ext2 Superblock Stats ===\n");
+    kprintf("Inodes count: %u\n", m->sb.s_inodes_count);
+    kprintf("Blocks count: %u\n", m->sb.s_blocks_count);
+    kprintf("Free inodes:  %u\n", m->sb.s_free_inodes_count);
+    kprintf("Free blocks:  %u\n", m->sb.s_free_blocks_count);
+    kprintf("First data block: %u\n", m->sb.s_first_data_block);
+    kprintf("Block size: %u\n", m->block_size);
+    kprintf("Blocks per group: %u\n", m->sb.s_blocks_per_group);
+    kprintf("Inodes per group: %u\n", m->sb.s_inodes_per_group);
+    kprintf("Magic: 0x%x\n\n", m->sb.s_magic);
+}
+
+static void ext2_print_blocks(vnode_t *node)
+{
+    ext2_mount_t *m = (ext2_mount_t *)node->mount->fs_data;
+    ext2_inode_t inode;
+    if (ext2_read_inode(m, node->inode, &inode) != 0) return;
+    
+    kprintf("\n=== Ext2 File Blocks (inode %lu) ===\n", node->inode);
+    kprintf("Size: %u bytes\n", inode.i_size);
+    kprintf("Blocks used: %u\n", inode.i_blocks);
+    
+    kprintf("Direct blocks: ");
+    for (int i = 0; i < 12; i++) {
+        if (inode.i_block[i] != 0) kprintf("%u ", inode.i_block[i]);
+    }
+    kprintf("\n");
+    
+    if (inode.i_block[12] != 0) {
+        kprintf("Single Indirect block: %u\n", inode.i_block[12]);
+        uint8_t *ind_buf = kmalloc(m->block_size);
+        if (ind_buf) {
+            read_fs_block(m, inode.i_block[12], ind_buf);
+            kprintf("  -> ");
+            uint32_t *ptrs = (uint32_t *)ind_buf;
+            uint32_t count = m->block_size / sizeof(uint32_t);
+            for (uint32_t i = 0; i < count; i++) {
+                if (ptrs[i] != 0) kprintf("%u ", ptrs[i]);
+            }
+            kprintf("\n");
+            kfree(ind_buf);
+        }
+    }
+    kprintf("\n");
+}
+
+static void ext2_print_dir(vnode_t *node)
+{
+    if (node->type != VFS_DIR) {
+        kprintf("\nExt2: Not a directory (inode %lu)\n", node->inode);
+        return;
+    }
+    
+    ext2_mount_t *m = (ext2_mount_t *)node->mount->fs_data;
+    ext2_inode_t inode;
+    if (ext2_read_inode(m, node->inode, &inode) != 0) return;
+    
+    kprintf("\n=== Ext2 Directory Entries (inode %lu) ===\n", node->inode);
+    uint8_t *buf = kmalloc(m->block_size);
+    if (!buf) return;
+    
+    for (int i = 0; i < 12; i++) {
+        if (inode.i_block[i] == 0) break;
+        
+        read_fs_block(m, inode.i_block[i], buf);
+        uint32_t offset = 0;
+        kprintf("Block %u:\n", inode.i_block[i]);
+        
+        while (offset < m->block_size) {
+            ext2_dirent_t *d = (ext2_dirent_t *)(buf + offset);
+            if (d->rec_len == 0) {
+                kprintf("  [offset %u] BREAK (rec_len=0)\n", offset);
+                break;
+            }
+            
+            char name_buf[256];
+            uint8_t len = (d->name_len < 255) ? d->name_len : 255;
+            memcpy(name_buf, d->name, len);
+            name_buf[len] = '\0';
+            
+            kprintf("  [offset %u] ino: %u | rec_len: %u | type: %u | name: '%s'\n", 
+                    offset, d->inode, d->rec_len, d->file_type, name_buf);
+                    
+            offset += d->rec_len;
+        }
+    }
+    kfree(buf);
+    kprintf("\n");
+}
+
+static void ext2_trace_path(mount_t *mnt, const char *path)
+{
+    ext2_mount_t *m = (ext2_mount_t *)mnt->fs_data;
+
+    /* --- Superblock header --- */
+    kprintf("\n=== VFS Path Trace: '%s' ===\n", path);
+    kprintf("Filesystem : ext2  Magic: 0x%x  Block size: %u\n",
+            m->sb.s_magic, m->block_size);
+    kprintf("Inodes: %u total, %u free  |  Blocks: %u total, %u free\n\n",
+            m->sb.s_inodes_count, m->sb.s_free_inodes_count,
+            m->sb.s_blocks_count, m->sb.s_free_blocks_count);
+
+    /* Start at root inode (inode 2) */
+    uint32_t cur_ino = EXT2_ROOT_INO;
+    kprintf("[/]  inode %u  (root)\n", cur_ino);
+
+    /* Walk each path component */
+    char comp[256];
+    const char *p = path;
+    while (*p == '/') p++;       /* skip leading slash */
+
+    uint8_t *buf = kmalloc(m->block_size);
+    if (!buf) { kprintf("Ext2 trace: out of memory\n"); return; }
+
+    while (*p)
+    {
+        /* Extract component */
+        size_t ci = 0;
+        while (*p && *p != '/' && ci < 255)
+            comp[ci++] = *p++;
+        comp[ci] = '\0';
+        while (*p == '/') p++;
+
+        /* Read current inode */
+        ext2_inode_t inode;
+        if (ext2_read_inode(m, cur_ino, &inode) != 0) {
+            kprintf("  ERROR: could not read inode %u\n", cur_ino);
+            break;
+        }
+
+        kprintf("  Searching for '%s' in inode %u  (mode: 0x%x, size: %u)\n",
+                comp, cur_ino, inode.i_mode, inode.i_size);
+
+        /* Scan direct blocks for the entry */
+        int found = 0;
+        for (int bi = 0; bi < 12 && !found; bi++)
+        {
+            if (inode.i_block[bi] == 0) break;
+
+            kprintf("    Block[%d] = %u  -> scanning dirents...\n",
+                    bi, inode.i_block[bi]);
+            read_fs_block(m, inode.i_block[bi], buf);
+
+            uint32_t offset = 0;
+            while (offset < m->block_size)
+            {
+                ext2_dirent_t *d = (ext2_dirent_t *)(buf + offset);
+                if (d->rec_len == 0) break;
+
+                if (d->inode && d->name_len == ci &&
+                    strncmp(d->name, comp, d->name_len) == 0)
+                {
+                    kprintf("    MATCH  inode %u  type %u  rec_len %u  name '%s'\n",
+                            d->inode, d->file_type, d->rec_len, comp);
+                    cur_ino = d->inode;
+                    found = 1;
+                    break;
+                }
+                offset += d->rec_len;
+            }
+        }
+
+        if (!found) {
+            kprintf("  NOT FOUND: '%s'\n", comp);
+            kfree(buf);
+            return;
+        }
+
+        kprintf("  -> entered inode %u  ('%s')\n\n", cur_ino, comp);
+    }
+
+    /* --- Destination inode details --- */
+    ext2_inode_t dest;
+    if (ext2_read_inode(m, cur_ino, &dest) == 0)
+    {
+        const char *kind = (dest.i_mode & 0x4000) ? "DIR" :
+                           (dest.i_mode & 0x8000) ? "FILE" : "OTHER";
+        kprintf("=== Destination: inode %u  type: %s  size: %u ===\n",
+                cur_ino, kind, dest.i_size);
+        kprintf("Direct blocks: ");
+        for (int i = 0; i < 12; i++)
+            if (dest.i_block[i]) kprintf("%u ", dest.i_block[i]);
+        kprintf("\n");
+        if (dest.i_block[12]) {
+            kprintf("Indirect block: %u  -> ",  dest.i_block[12]);
+            read_fs_block(m, dest.i_block[12], buf);
+            uint32_t *ptrs = (uint32_t *)buf;
+            uint32_t cnt   = m->block_size / sizeof(uint32_t);
+            for (uint32_t i = 0; i < cnt; i++)
+                if (ptrs[i]) kprintf("%u ", ptrs[i]);
+            kprintf("\n");
+        }
+    }
+    kprintf("\n");
+    kfree(buf);
 }
 
 /* Read a filesystem block using block numbers */
@@ -156,55 +368,48 @@ static int find_free_bit(uint8_t *map, uint32_t size_bytes)
 static void set_bit(uint8_t *map, int bit) { map[bit / 8] |= (1 << (bit % 8)); }
 static void clear_bit(uint8_t *map, int bit) { map[bit / 8] &= ~(1 << (bit % 8)); }
 
-static uint32_t alloc_inode(ext2_mount_t *m)
+static int alloc_bitmap_bit(ext2_mount_t *m, uint32_t bitmap_block)
 {
     uint8_t *buf = kmalloc(m->block_size);
-    if (!buf)
-        return 0; // makes sure that kmalloc returned a valid address
-
-    if (read_fs_block(m, m->bgdt[0].bg_inode_bitmap, buf) != 0)
-    {
-        kfree(buf);
-        return 0;
-    }
-
-    int bit = find_free_bit(buf, m->block_size); // searches for a place to fit the inode
-    if (bit == -1)
-    {
-        kfree(buf);
-        return 0;
-    }
-
+    if (!buf) return -1;
+    if (read_fs_block(m, bitmap_block, buf) != 0) { kfree(buf); return -1; }
+    
+    int bit = find_free_bit(buf, m->block_size);
+    if (bit == -1) { kfree(buf); return -1; }
+    
     set_bit(buf, bit);
-    write_fs_block(m, m->bgdt[0].bg_inode_bitmap, buf);
+    write_fs_block(m, bitmap_block, buf);
     kfree(buf);
+    return bit;
+}
 
+static void free_bitmap_bit(ext2_mount_t *m, uint32_t bitmap_block, int bit)
+{
+    uint8_t *buf = kmalloc(m->block_size);
+    if (!buf) return;
+    if (read_fs_block(m, bitmap_block, buf) != 0) { kfree(buf); return; }
+    
+    clear_bit(buf, bit);
+    write_fs_block(m, bitmap_block, buf);
+    kfree(buf);
+}
+
+static uint32_t alloc_inode(ext2_mount_t *m)
+{
+    int bit = alloc_bitmap_bit(m, m->bgdt[0].bg_inode_bitmap);
+    if (bit == -1) return 0;
+    
     m->sb.s_free_inodes_count--;
     m->bgdt[0].bg_free_inodes_count--;
     ext2_sync_metadata(m);
-
     return bit + 1;
 }
 
 static void free_inode(ext2_mount_t *m, uint32_t ino)
 {
-    if (ino == 0) // checks if the inode number is valid
-        return;
-
-    uint8_t *buf = kmalloc(m->block_size);
-    if (!buf)
-        return;
-
-    if (read_fs_block(m, m->bgdt[0].bg_inode_bitmap, buf) != 0)
-    {
-        kfree(buf);
-        return;
-    }
-
-    clear_bit(buf, ino - 1);
-    write_fs_block(m, m->bgdt[0].bg_inode_bitmap, buf);
-    kfree(buf);
-
+    if (ino == 0) return;
+    free_bitmap_bit(m, m->bgdt[0].bg_inode_bitmap, ino - 1);
+    
     m->sb.s_free_inodes_count++;
     m->bgdt[0].bg_free_inodes_count++;
     ext2_sync_metadata(m);
@@ -212,55 +417,20 @@ static void free_inode(ext2_mount_t *m, uint32_t ino)
 
 static uint32_t alloc_block(ext2_mount_t *m)
 {
-    uint8_t *buf = kmalloc(m->block_size);
-    if (!buf)
-        return 0;
-
-    if (read_fs_block(m, m->bgdt[0].bg_block_bitmap, buf) != 0)
-    {
-        kfree(buf);
-        return 0;
-    }
-
-    int bit = find_free_bit(buf, m->block_size);
-    if (bit == -1)
-    {
-        kfree(buf);
-        return 0;
-    }
-
-    set_bit(buf, bit);
-    write_fs_block(m, m->bgdt[0].bg_block_bitmap, buf);
-    kfree(buf);
-
+    int bit = alloc_bitmap_bit(m, m->bgdt[0].bg_block_bitmap);
+    if (bit == -1) return 0;
+    
     m->sb.s_free_blocks_count--;
     m->bgdt[0].bg_free_blocks_count--;
     ext2_sync_metadata(m);
-
     return m->sb.s_first_data_block + bit;
 }
 
 static void free_block(ext2_mount_t *m, uint32_t block)
 {
-    if (block < m->sb.s_first_data_block)
-        return;
-
-    uint8_t *buf = kmalloc(m->block_size);
-    if (!buf)
-        return;
-
-    if (read_fs_block(m, m->bgdt[0].bg_block_bitmap, buf) != 0)
-    {
-        kfree(buf);
-        return;
-    }
-
-    int bit = block - m->sb.s_first_data_block;
-    clear_bit(buf, bit);
-    write_fs_block(m, m->bgdt[0].bg_block_bitmap, buf);
-    kfree(buf);
-
-    // update counters
+    if (block < m->sb.s_first_data_block) return;
+    free_bitmap_bit(m, m->bgdt[0].bg_block_bitmap, block - m->sb.s_first_data_block);
+    
     m->sb.s_free_blocks_count++;
     m->bgdt[0].bg_free_blocks_count++;
     ext2_sync_metadata(m);

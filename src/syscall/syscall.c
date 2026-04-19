@@ -426,7 +426,7 @@ static long sys_unlink(const char *path)
     return vfs_unlink(abs_path);
 }
 
-static long sys_kernel_print(int flag, int pid)
+static long sys_kernel_print(int flag, long arg)
 {
     switch (flag)
     {
@@ -452,7 +452,15 @@ static long sys_kernel_print(int flag, int pid)
     }
     case KPPCB:
     {
-        process_print_pcb(pid);
+        process_print_pcb((int)arg);
+        break;
+    }
+    case KPVFST:
+    case KPFSSTAT:
+    case KPDIR:
+    case KPFILEBLK:
+    {
+        vfs_kp(flag, arg);
         break;
     }
     default:

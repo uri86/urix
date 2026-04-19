@@ -166,6 +166,10 @@ static inline void proct(void) { syscall1(SYS_KPS, KPPPT); }
 static inline void pmmstat(void) { syscall1(SYS_KPS, KPPMM); }
 static inline void prntlg(void) { syscall1(SYS_KPS, KPLG); }
 static inline void kmlcstat(void) { syscall1(SYS_KPS, KPMAL); }
+static inline void vfstrace(const char *path) { syscall2(SYS_KPS, KPVFST, (long)path); }
+static inline void fsstat(void) { syscall1(SYS_KPS, KPFSSTAT); }
+static inline void fdir(int fd) { syscall2(SYS_KPS, KPDIR, fd); }
+static inline void fblk(int fd) { syscall2(SYS_KPS, KPFILEBLK, fd); }
 
 static inline long change_terminal_color(uint64_t fg, uint64_t bg)
 {

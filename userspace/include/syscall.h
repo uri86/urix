@@ -55,6 +55,10 @@
 #define KPLG 3
 #define KPPPT 4
 #define KPPCB 5
+#define KPVFST 6
+#define KPFSSTAT 7
+#define KPDIR 8
+#define KPFILEBLK 9
 
 /* open flags */
 #define O_RDONLY 0x0000
