@@ -98,7 +98,7 @@ void vmm_init(void)
      * This is the identity-mapped PML4 created by PMM during boot
      */
     uint64_t current_pml4_phys = read_cr3();
-    kprintf("Current PML4 (identity): %llx\n", current_pml4_phys);
+    kprintf("Current PML4 (identity): 0x%llx\n", current_pml4_phys);
 
     /*
      * Allocate new PML4 for kernel space
@@ -115,7 +115,7 @@ void vmm_init(void)
     kernel_space.pml4_virt = (uint64_t *)kernel_space.pml4_phys;
     memset(kernel_space.pml4_virt, 0, PAGE_SIZE);
 
-    kprintf("Kernel PML4 allocated at: %llx\n", kernel_space.pml4_phys);
+    kprintf("Kernel PML4 allocated at: 0x%llx\n", kernel_space.pml4_phys);
 
     /*
      * Copy existing identity mapping
@@ -134,7 +134,7 @@ void vmm_init(void)
      * This allows us to access all kernel memory at high addresses
      */
     uint64_t map_size = 2ULL * 1024 * 1024 * 1024; /* 2GB */
-    kprintf("Creating higher-half mapping (2GB at %llx)...\n", KERNEL_VIRT_BASE);
+    kprintf("Creating higher-half mapping (2GB at 0x%llx)...\n", KERNEL_VIRT_BASE);
 
     uint64_t pages_mapped = 0;
     for (uint64_t phys = 0; phys < map_size; phys += PAGE_SIZE)
@@ -143,7 +143,7 @@ void vmm_init(void)
 
         if (vmm_map_page(&kernel_space, virt, phys, VMM_KERNEL_FLAGS) != 0)
         {
-            kprintf("FATAL: Failed to map page at virt=%llx phys=%llx\n", virt, phys);
+            kprintf("FATAL: Failed to map page at virt=0x%llx phys=0x%llx\n", virt, phys);
             PANIC("Failed to map higher-half kernel page");
         }
 
@@ -162,13 +162,13 @@ void vmm_init(void)
      * Switch to new page tables
      * After this, we have BOTH identity and higher-half mappings active
      */
-    kprintf("Switching to new page tables (CR3 = %llx)...\n", kernel_space.pml4_phys);
+    kprintf("Switching to new page tables (CR3 = 0x%llx)...\n", kernel_space.pml4_phys);
     write_cr3(kernel_space.pml4_phys);
     current_space = &kernel_space;
 
     kprintf("Page tables switched successfully\n");
-    kprintf("Identity mapping: 0x0 - %llx\n", map_size);
-    kprintf("Higher-half mapping: %llx - %llx\n",
+    kprintf("Identity mapping: 0x0 - 0x%llx\n", map_size);
+    kprintf("Higher-half mapping: 0x%llx - 0x%llx\n",
             KERNEL_VIRT_BASE, KERNEL_VIRT_BASE + map_size);
 
     kprintf("VMM initialized (dual mapping active)\n");
@@ -289,7 +289,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
                     uint64_t dst_phys = pmm_alloc_frame();
                     if (!dst_phys)
                     {
-                        debug_kprintf("vmm_clone_user_space: OOM at virt %llx\n", virt);
+                        debug_kprintf("vmm_clone_user_space: OOM at virt 0x%llx\n", virt);
                         __asm__ volatile("sti");
                         return -1;
                     }
@@ -300,7 +300,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
 
                     if (vmm_map_page(dst, virt, dst_phys, flags) != 0)
                     {
-                        debug_kprintf("vmm_clone_user_space: map failed at virt %llx\n", virt);
+                        debug_kprintf("vmm_clone_user_space: map failed at virt 0x%llx\n", virt);
                         pmm_free_frame(dst_phys);
                         __asm__ volatile("sti");
                         return -1;

@@ -151,7 +151,7 @@ void gdt_init(void)
      * TSS (Task State Segment)
      */
     gdt_set_tss(5, (uint64_t)&tss);
-    kprintf("Entry 5-6: TSS at %llx\n", (uint64_t)&tss);
+    kprintf("Entry 5-6: TSS at 0x%llx\n", (uint64_t)&tss);
 
     /* Initialize TSS */
     tss.rsp0 = 0;
@@ -162,7 +162,7 @@ void gdt_init(void)
     gdt_ptr.base = (uint64_t)&gdt;
 
     /* Load the GDT */
-    kprintf("Loading GDT at %llx (limit: %u)...\n", gdt_ptr.base, gdt_ptr.limit);
+    kprintf("Loading GDT at 0x%llx (limit: %u)...\n", gdt_ptr.base, gdt_ptr.limit);
     gdt_load((uint64_t)&gdt_ptr);
 
     /* Load the TSS */

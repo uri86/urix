@@ -160,7 +160,7 @@ __attribute__((interrupt))
 static void invalid_opcode_exception_handler(struct cpu_interrupt_frame *frame)
 {
     process_t *current = process_get_current();
-    kprintf("[EXCEPTION] Invalid Opcode at RIP %llx, vector 6\n", frame->rip);
+    kprintf("[EXCEPTION] Invalid Opcode at RIP 0x%llx, vector 6\n", frame->rip);
     if (current && current->privilege == PROCESS_USER)
     {
         kprintf("[EXCEPTION] Killing user process %u (%s) due to invalid opcode\n", current->pid, current->name);
@@ -173,7 +173,7 @@ __attribute__((interrupt))
 static void general_protection_fault_handler(struct cpu_interrupt_frame *frame, uint64_t error_code)
 {
     process_t *current = process_get_current();
-    kprintf("[EXCEPTION] General Protection Fault at RIP %llx, code %llx\n", frame->rip, error_code);
+    kprintf("[EXCEPTION] General Protection Fault at RIP 0x%llx, code 0x%llx\n", frame->rip, error_code);
     if (current && current->privilege == PROCESS_USER)
     {
         kprintf("[EXCEPTION] Killing user process %u (%s) due to GPF\n", current->pid, current->name);
@@ -185,8 +185,7 @@ static void general_protection_fault_handler(struct cpu_interrupt_frame *frame, 
 __attribute__((interrupt)) static void divide_by_zero_exception_handler(struct cpu_interrupt_frame *frame)
 {
     process_t *current = process_get_current();
-
-    kprintf("[EXCEPTION] Divide by zero at RIP %llx, vector 0\n", frame->rip);
+    kprintf("[EXCEPTION] Divide by zero at RIP 0x%llx, vector 0\n", frame->rip);
 
     if (current && current->privilege == PROCESS_USER)
     {
@@ -204,7 +203,7 @@ static void page_fault_exception_handler(struct cpu_interrupt_frame *frame, uint
     uint64_t cr2;
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
 
-   kprintf("[EXCEPTION] Page fault at address %llx, RIP %llx, code %llx\n", cr2, frame->rip, error_code);
+   kprintf("[EXCEPTION] Page fault at address 0x%llx, RIP 0x%llx, code 0x%llx\n", cr2, frame->rip, error_code);
     if (current && current->privilege == PROCESS_USER)
     {
         kprintf("[EXCEPTION] Killing user process %u (%s) due to page fault\n", current->pid, current->name);
@@ -219,16 +218,16 @@ void exception_handler(struct interrupt_frame *frame)
 
     kprintf("\n========== EXCEPTION ==========\n");
     kprintf("Exception: vector %llu\n", frame->int_no);
-    kprintf("Error Code: %llx\n", frame->err_code);
+    kprintf("Error Code: 0x%llx\n", frame->err_code);
     kprintf("\nRegisters:\n");
-    kprintf("RAX=%llx RBX=%llx RCX=%llx\n", frame->rax, frame->rbx, frame->rcx);
-    kprintf("RDX=%llx RSI=%llx RDI=%llx\n", frame->rdx, frame->rsi, frame->rdi);
-    kprintf("RBP=%llx RSP=%llx\n", frame->rbp, frame->rsp);
-    kprintf("R8=%llx R9=%llx R10=%llx\n", frame->r8, frame->r9, frame->r10);
-    kprintf("R11=%llx R12=%llx R13=%llx\n", frame->r11, frame->r12, frame->r13);
-    kprintf("R14=%llx R15=%llx\n", frame->r14, frame->r15);
-    kprintf("RIP=%llx CS =%llx\n", frame->rip, frame->cs);
-    kprintf("RFLAGS=%llx\n", frame->rflags);
+    kprintf("RAX=0x%llx RBX=0x%llx RCX=0x%llx\n", frame->rax, frame->rbx, frame->rcx);
+    kprintf("RDX=0x%llx RSI=0x%llx RDI=0x%llx\n", frame->rdx, frame->rsi, frame->rdi);
+    kprintf("RBP=0x%llx RSP=0x%llx\n", frame->rbp, frame->rsp);
+    kprintf("R8=0x%llx R9=0x%llx R10=0x%llx\n", frame->r8, frame->r9, frame->r10);
+    kprintf("R11=0x%llx R12=0x%llx R13=0x%llx\n", frame->r11, frame->r12, frame->r13);
+    kprintf("R14=0x%llx R15=0x%llx\n", frame->r14, frame->r15);
+    kprintf("RIP=0x%llx CS =0x%llx\n", frame->rip, frame->cs);
+    kprintf("RFLAGS=0x%llx\n", frame->rflags);
     kprintf("==============================\n");
     kprintf("\nSystem halted.\n");
     halt();

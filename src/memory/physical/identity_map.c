@@ -41,7 +41,7 @@ static inline uint64_t *get_or_alloc_table(uint64_t *parent_table, unsigned inde
         uint64_t phys = pt_alloc_page_phys();
         if (!phys)
         {
-            kprintf("identity_map_all: ERROR - failed to allocate %s at addr %llx\n", level_name, (uint64_t)addr);
+            kprintf("identity_map_all: ERROR - failed to allocate %s at addr 0x%llx\n", level_name, (uint64_t)addr);
             return NULL;
         }
         parent_table[index] = phys | PAGE_PRESENT_RW;
@@ -57,7 +57,7 @@ void pt_alloc_init(uint64_t start_phys, uint64_t limit_phys)
     pt_alloc_limit = limit_phys & ~(PAGE_SIZE - 1);
     pt_alloc_start_saved = pt_alloc_next;
 
-    kprintf("pt_alloc_init: range [%llx - %llx] (%llu KiB)\n",
+    kprintf("pt_alloc_init: range [0x%llx - 0x%llx] (%llu KiB)\n",
             (uint64_t)pt_alloc_next,
             (uint64_t)pt_alloc_limit,
             (uint64_t)((pt_alloc_limit - pt_alloc_next) / 1024ULL));
@@ -69,7 +69,7 @@ uint64_t pt_alloc_page_phys(void)
     if (pt_alloc_next + PAGE_SIZE > pt_alloc_limit)
     {
         kprintf("CRITICAL: Page table allocator exhausted\n");
-        kprintf("  Next: %llx, Limit: %llx\n",
+        kprintf("  Next: 0x%llx, Limit: 0x%llx\n",
                 (uint64_t)pt_alloc_next,
                 (uint64_t)pt_alloc_limit);
         kprintf("  Used: %llu KiB of %llu KiB\n",
@@ -90,7 +90,7 @@ uint64_t pt_alloc_page_phys(void)
     else
     {
         /* This should never happen if PT reserve is within EARLY_IDENTITY_LIMIT */
-        kprintf("CRITICAL ERROR: PT page at %llx is beyond EARLY_IDENTITY_LIMIT %llx\n",
+        kprintf("CRITICAL ERROR: PT page at 0x%llx is beyond EARLY_IDENTITY_LIMIT 0x%llx\n",
                 (unsigned long long)page, (unsigned long long)EARLY_IDENTITY_LIMIT);
         return 0;
     }
@@ -133,14 +133,14 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
     /* Ensure allocator range is within identity-mapped area */
     if (pt_alloc_start >= EARLY_IDENTITY_LIMIT)
     {
-        kprintf("identity_map_all: ERROR - PT alloc start %llx >= EARLY_IDENTITY_LIMIT %llx\n",
+        kprintf("identity_map_all: ERROR - PT alloc start 0x%llx >= EARLY_IDENTITY_LIMIT 0x%llx\n",
                 (uint64_t)pt_alloc_start, (uint64_t)EARLY_IDENTITY_LIMIT);
         return 0;
     }
 
     if (pt_alloc_limit > EARLY_IDENTITY_LIMIT)
     {
-        kprintf("identity_map_all: WARNING - PT alloc limit %llx exceeds EARLY_IDENTITY_LIMIT %llx, clamping\n",
+        kprintf("identity_map_all: WARNING - PT alloc limit 0x%llx exceeds EARLY_IDENTITY_LIMIT 0x%llx, clamping\n",
                 (uint64_t)pt_alloc_limit, (uint64_t)EARLY_IDENTITY_LIMIT);
         pt_alloc_limit = EARLY_IDENTITY_LIMIT;
     }
@@ -148,7 +148,7 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
     /* Round up map_end to page boundary */
     map_end = (map_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
-    kprintf("identity_map_all: mapping [0x0 - %llx] (%llu MiB)\n",
+    kprintf("identity_map_all: mapping [0x0 - 0x%llx] (%llu MiB)\n",
             (uint64_t)map_end,
             (uint64_t)(map_end / (1024ULL * 1024ULL)));
 
@@ -164,7 +164,7 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
     }
 
     uint64_t *pml4 = (uint64_t *)(uintptr_t)pml4_phys;
-    kprintf("identity_map_all: PML4 allocated at phys %llx\n", (uint64_t)pml4_phys);
+    kprintf("identity_map_all: PML4 allocated at phys 0x%llx\n", (uint64_t)pml4_phys);
 
     uint64_t last_reported_mb = 0;
     uint64_t pages_mapped = 0;
@@ -175,7 +175,7 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
         uint64_t current_mb = addr / (1024ULL * 1024ULL);
         if (current_mb >= last_reported_mb + 256ULL)
         {
-            kprintf("  mapped up to %llu MiB (%llu pages)...\n",
+            kprintf("  mapped up to 0x%llx MiB (0x%llx pages)...\n",
                     (uint64_t)current_mb, (uint64_t)pages_mapped);
             last_reported_mb = current_mb;
         }
@@ -209,7 +209,7 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
     pt_alloc_print_usage();
 
     /* DO NOT switch CR3 here - let caller do it when ready */
-    kprintf("identity_map_all: SUCCESS - returning PML4 at phys %llx\n", (uint64_t)pml4_phys);
+    kprintf("identity_map_all: SUCCESS - returning PML4 at phys 0x%llx\n", (uint64_t)pml4_phys);
     kprintf("identity_map_all: Caller must switch CR3 when ready\n");
 
     return pml4_phys;

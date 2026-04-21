@@ -74,7 +74,7 @@ static int elf_copy_to_mapped(address_space_t *addr_space, uint64_t dst_vaddr, c
         uint64_t phys = vmm_get_physical(addr_space, page_vaddr);
         if (phys == 0)
         {
-            debug_kprintf("ELF: vmm_get_physical returned 0 for vaddr %lx\n",
+            debug_kprintf("ELF: vmm_get_physical returned 0 for vaddr 0x%lx\n",
                           page_vaddr);
             return -1;
         }
@@ -104,7 +104,7 @@ static int elf_zero_mapped(address_space_t *addr_space, uint64_t dst_vaddr, uint
         uint64_t phys = vmm_get_physical(addr_space, page_vaddr);
         if (phys == 0)
         {
-            debug_kprintf("ELF: vmm_get_physical returned 0 for BSS vaddr %lx\n",
+            debug_kprintf("ELF: vmm_get_physical returned 0 for BSS vaddr 0x%lx\n",
                           page_vaddr);
             return -1;
         }
@@ -129,8 +129,8 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
         return -1;
 
     debug_kprintf("ELF: Loading executable...\n");
-    debug_kprintf("ELF: Entry point: %lx\n", ehdr->e_entry);
-    debug_kprintf("ELF: Program headers: %u at offset %lx\n", ehdr->e_phnum, ehdr->e_phoff);
+    debug_kprintf("ELF: Entry point: 0x%lx\n", ehdr->e_entry);
+    debug_kprintf("ELF: Program headers: %u at offset 0x%lx\n", ehdr->e_phnum, ehdr->e_phoff);
 
     const elf64_phdr_t *phdr =
         (const elf64_phdr_t *)((const uint8_t *)data + ehdr->e_phoff);
@@ -152,7 +152,7 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
             highest_addr = end;
     }
 
-    debug_kprintf("ELF: Address range: %lx - %lx\n", lowest_addr, highest_addr);
+    debug_kprintf("ELF: Address range: 0x%lx - 0x%lx\n", lowest_addr, highest_addr);
 
     /* load segments */
     for (int i = 0; i < ehdr->e_phnum; i++)
@@ -161,16 +161,16 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
             continue;
 
         debug_kprintf("ELF: Loading segment %d:\n", i);
-        debug_kprintf("  Virtual addr: %lx\n", phdr[i].p_vaddr);
-        debug_kprintf("  File size:    %lx\n", phdr[i].p_filesz);
-        debug_kprintf("  Memory size:  %lx\n", phdr[i].p_memsz);
+        debug_kprintf("  Virtual addr: 0x%lx\n", phdr[i].p_vaddr);
+        debug_kprintf("  File size:    0x%lx\n", phdr[i].p_filesz);
+        debug_kprintf("  Memory size:  0x%lx\n", phdr[i].p_memsz);
         debug_kprintf("  Flags: %c%c%c\n", (phdr[i].p_flags & PF_R) ? 'R' : '-', (phdr[i].p_flags & PF_W) ? 'W' : '-', (phdr[i].p_flags & PF_X) ? 'X' : '-');
 
         uint64_t vaddr_aligned = PAGE_ALIGN_DOWN(phdr[i].p_vaddr);
         uint64_t vaddr_end = PAGE_ALIGN_UP(phdr[i].p_vaddr + phdr[i].p_memsz);
         uint64_t num_pages = (vaddr_end - vaddr_aligned) / PAGE_SIZE;
 
-        debug_kprintf("  Mapping pages: %lx - %lx (%lu pages)\n",
+        debug_kprintf("  Mapping pages: 0x%lx - 0x%lx (%lu pages)\n",
                       vaddr_aligned, vaddr_end, num_pages);
 
         uint64_t flags = VMM_USER | VMM_PRESENT;
@@ -191,7 +191,7 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
 
             if (vmm_map_page(addr_space, vaddr, phys, flags) != 0)
             {
-                debug_kprintf("ELF: Failed to map page at %lx\n", vaddr);
+                debug_kprintf("ELF: Failed to map page at 0x%lx\n", vaddr);
                 pmm_free_frame(phys);
                 return -1;
             }
@@ -202,7 +202,7 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
         {
             const uint8_t *src = (const uint8_t *)data + phdr[i].p_offset;
 
-            debug_kprintf("  Copying %lx bytes from file offset %lx to vaddr %lx\n",
+            debug_kprintf("  Copying 0x%lx bytes from file offset 0x%lx to vaddr 0x%lx\n",
                           phdr[i].p_filesz, phdr[i].p_offset, phdr[i].p_vaddr);
 
             if (elf_copy_to_mapped(addr_space, phdr[i].p_vaddr,
@@ -218,7 +218,7 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
             uint64_t bss_start = phdr[i].p_vaddr + phdr[i].p_filesz;
             uint64_t bss_size = phdr[i].p_memsz - phdr[i].p_filesz;
 
-            debug_kprintf("  Zeroing BSS: %lx - %lx (%lu bytes)\n",
+            debug_kprintf("  Zeroing BSS: 0x%lx - 0x%lx (%lu bytes)\n",
                           bss_start, bss_start + bss_size, bss_size);
 
             if (elf_zero_mapped(addr_space, bss_start, bss_size) != 0)
@@ -235,10 +235,10 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
     info->stack_top = USER_STACK_TOP;
 
     debug_kprintf("ELF: Loaded successfully!\n");
-    debug_kprintf("  Entry point:  %lx\n", info->entry_point);
-    debug_kprintf("  Base address: %lx\n", info->base_address);
-    debug_kprintf("  Break (heap): %lx\n", info->brk);
-    debug_kprintf("  Stack top:    %lx\n", info->stack_top);
+    debug_kprintf("  Entry point:  0x%lx\n", info->entry_point);
+    debug_kprintf("  Base address: 0x%lx\n", info->base_address);
+    debug_kprintf("  Break (heap): 0x%lx\n", info->brk);
+    debug_kprintf("  Stack top:    0x%lx\n", info->stack_top);
 
     return 0;
 }

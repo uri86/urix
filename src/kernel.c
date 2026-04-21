@@ -90,7 +90,7 @@ void keyboard_test_process(void)
         else if (strcmp(buffer, "state") == 0)
         {
             uint16_t state = keyboard_get_state();
-            kprintf("Keyboard state: %x\n", state);
+            kprintf("Keyboard state: 0x%x\n", state);
             kprintf("  Shift: %s\n", (state & KB_SHIFT) ? "ON" : "OFF");
             kprintf("  Ctrl:  %s\n", (state & KB_CTRL) ? "ON" : "OFF");
             kprintf("  Alt:   %s\n", (state & KB_ALT) ? "ON" : "OFF");
@@ -212,7 +212,7 @@ void start_init_process(void)
 
     int pid = process_load_elf("init", data, size, PRIORITY_NORMAL);
 
-    kprintf("DEBUG: about to kfree data=%lx size=%lu pid=%d\n",
+    kprintf("DEBUG: about to kfree data=0x%lx size=%lu pid=%d\n",
             (uint64_t)data, size, pid);
     kfree(data);
     kprintf("DEBUG: kfree done\n");

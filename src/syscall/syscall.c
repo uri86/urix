@@ -384,7 +384,7 @@ static long sys_exec(const char *path, char *const argv[])
     for (int i = 0; i < 15; i++)
         regs[i] = 0;
 
-    debug_kprintf("exec: ready — entry=%lx sp=%lx argc=%d\n",
+    debug_kprintf("exec: ready — entry=0x%lx sp=0x%lx argc=%d\n",
                   elf_info.entry_point, sp, argc);
     kfree(kargs);
     return 0;

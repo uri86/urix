@@ -172,7 +172,7 @@ void kfree(void *ptr)
     {
         if (hdr_before->canary != KMALLOC_CANARY)
         {
-            kprintf("[kfree CORRUPTION] page-alloc header at %llx has bad canary %llx (ptr=%llx)\n", (uint64_t)hdr_before, hdr_before->canary, (uint64_t)ptr);
+            kprintf("[kfree CORRUPTION] page-alloc header at 0x%llx has bad canary 0x%llx (ptr=0x%llx)\n", (uint64_t)hdr_before, hdr_before->canary, (uint64_t)ptr);
             PANIC("heap corruption detected in kfree");
         }
         free_pages(ptr);
@@ -184,7 +184,7 @@ void kfree(void *ptr)
 
     if (hdr->canary != KMALLOC_CANARY)
     {
-        kprintf("[kfree CORRUPTION] slab header at %llx has bad canary %llx (ptr=%llx)\n", (uint64_t)hdr, hdr->canary, (uint64_t)ptr);
+        kprintf("[kfree CORRUPTION] slab header at 0x%llx has bad canary 0x%llx (ptr=0x%llx)\n", (uint64_t)hdr, hdr->canary, (uint64_t)ptr);
         PANIC("heap corruption detected in kfree");
     }
 

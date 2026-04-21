@@ -98,7 +98,7 @@ static void mark_region_used_internal(uint64_t phys_start, uint64_t phys_end)
 {
     if (phys_end <= phys_start)
         return;
-    kprintf("Marking region used: [%llx - %llx]\n", (uint64_t)phys_start, (uint64_t)phys_end);
+    kprintf("Marking region used: [0x%llx - 0x%llx]\n", (uint64_t)phys_start, (uint64_t)phys_end);
 
     uint64_t frame_start = phys_start / PAGE_SIZE;
     uint64_t frame_end = div_round_up(phys_end, PAGE_SIZE);
@@ -164,14 +164,14 @@ void pmm_free_frame(uint64_t phys_addr)
 
     if (phys_addr % PAGE_SIZE)
     {
-        kprintf("pmm_free_frame: ERROR - address %llx not page-aligned\n", (uint64_t)phys_addr);
+        kprintf("pmm_free_frame: ERROR - address 0x%llx not page-aligned\n", (uint64_t)phys_addr);
         return;
     }
 
     uint64_t frame_idx = phys_addr / PAGE_SIZE;
     if (frame_idx >= bitmap_num_frames)
     {
-        kprintf("pmm_free_frame: ERROR - frame %llu out of range\n", (uint64_t)frame_idx);
+        kprintf("pmm_free_frame: ERROR - frame 0x%llx out of range\n", (uint64_t)frame_idx);
         return;
     }
 
@@ -195,12 +195,12 @@ void pmm_print_stats(void)
     kprintf("Used: %llu MB (%llu frames)\n",
             (uint64_t)(((total_frames - free_frames) * PAGE_SIZE) / (1024 * 1024)),
             (uint64_t)(total_frames - free_frames));
-    kprintf("Highest usable: %llx (%llu MiB)\n",
+    kprintf("Highest usable: 0x%llx (%llu MiB)\n",
             (uint64_t)highest_usable_addr, (uint64_t)(highest_usable_addr / (1024 * 1024)));
-    kprintf("Bitmap: %llu KB at phys %llx\n",
+    kprintf("Bitmap: %llu KB at phys 0x%llx\n",
             (uint64_t)(bitmap_size_bytes / 1024),
             (uint64_t)((uintptr_t)bitmap));
-    kprintf("PT reserve: [%llx - %llx]\n", (uint64_t)pt_reserve_start, (uint64_t)pt_reserve_end);
+    kprintf("PT reserve: [0x%llx - 0x%llx]\n", (uint64_t)pt_reserve_start, (uint64_t)pt_reserve_end);
     kprintf("======================\n\n");
 }
 /**
@@ -229,7 +229,7 @@ static uint64_t find_bitmap_region(
         uint64_t region_start = regions[i].start;
         uint64_t region_end = regions[i].end;
 
-        debug_kprintf("Searching for bitmap in region: [%llx - %llx]\n", region_start, region_end);
+        debug_kprintf("Searching for bitmap in region: [0x%llx - 0x%llx]\n", region_start, region_end);
 
         if (regions[i].type != MULTIBOOT_MMAP_AVAILABLE)
             continue;
@@ -253,7 +253,7 @@ static uint64_t find_bitmap_region(
         {
             uint64_t candidate_end = candidate + bitmap_bytes_needed;
 
-            debug_kprintf("  Trying: [%llx - %llx]\n", candidate, candidate_end);
+            debug_kprintf("  Trying: [0x%llx - 0x%llx]\n", candidate, candidate_end);
 
             // Check if overlaps with kernel
             if (ranges_overlap(candidate, candidate_end, kernel_start, kernel_end))
@@ -280,14 +280,14 @@ static uint64_t find_bitmap_region(
             }
 
             // Found a suitable region!
-            debug_kprintf("  -> FOUND suitable region at %llx\n", candidate);
+            debug_kprintf("  -> FOUND suitable region at 0x%llx\n", candidate);
             return candidate;
 
             // Advance to the next page for the next check (guaranteed advancement)
             candidate += PAGE_SIZE;
         }
 
-        debug_kprintf("  -> No suitable space found in region [%llx - %llx]\n", region_start, region_end);
+        debug_kprintf("  -> No suitable space found in region [0x%llx - 0x%llx]\n", region_start, region_end);
     }
 
     debug_kprintf("  -> No suitable space found in any available region\n");
@@ -307,7 +307,7 @@ void pmm_init(multiboot_size_tag *s)
     /* Calculate multiboot region boundaries */
     uint64_t multiboot_start = align_down((uint64_t)s, PAGE_SIZE);
     uint64_t multiboot_end = align_up((uint64_t)s + s->total_size, PAGE_SIZE);
-    debug_kprintf("Multiboot info: [%llx - %llx] (%llu KB)\n",
+    debug_kprintf("Multiboot info: [0x%llx - 0x%llx] (%llu KB)\n",
                   multiboot_start, multiboot_end,
                   (multiboot_end - multiboot_start) / 1024);
 
@@ -343,7 +343,7 @@ void pmm_init(multiboot_size_tag *s)
                 uint64_t region_start = entry->addr;
                 uint64_t region_end = entry->addr + entry->len;
                 uint32_t region_type = entry->type;
-                kprintf("  [%llx - %llx] type=%u (%llu KB)\n", region_start, region_end, region_type, entry->len / 1024);
+                kprintf("  [0x%llx - 0x%llx] type=%u (%llu KB)\n", region_start, region_end, region_type, entry->len / 1024);
 
                 regions[regions_count].start = region_start;
                 regions[regions_count].end = region_end;
@@ -377,7 +377,7 @@ void pmm_init(multiboot_size_tag *s)
 
     kprintf("\nTotal usable RAM: %llu MB (%llu frames)\n",
             usable_bytes / (1024 * 1024), total_frames);
-    kprintf("Highest usable address: %llx (%llu MiB)\n",
+    kprintf("Highest usable address: 0x%llx (%llu MiB)\n",
             highest_usable_addr, highest_usable_addr / (1024 * 1024));
 
     /* Calculate bitmap size */
@@ -393,18 +393,18 @@ void pmm_init(multiboot_size_tag *s)
         bitmap_bytes_needed = MAX_BITMAP_SIZE;
         addr_space_frames = MAX_BITMAP_SIZE * 8;
         highest_usable_addr = addr_space_frames * PAGE_SIZE;
-        kprintf("WARNING: Only tracking up to %llx (%llu MB)\n",
+        kprintf("WARNING: Only tracking up to 0x%llx (%llu MB)\n",
                 highest_usable_addr, highest_usable_addr / (1024 * 1024));
     }
 
-    kprintf("Bitmap size needed: %llu KB for %llu frames (tracking up to %llx)\n",
+    kprintf("Bitmap size needed: %llu KB for %llu frames (tracking up to 0x%llx)\n",
             bitmap_bytes_needed / 1024, addr_space_frames, highest_usable_addr);
 
     /* Kernel bounds */
     uint64_t kernel_phys_start = (uint64_t)&_kernel_start - KERNEL_VIRT_BASE;
     uint64_t kernel_phys_end = align_up((uint64_t)&_kernel_end - KERNEL_VIRT_BASE, PAGE_SIZE);
 
-    kprintf("Kernel: [%llx - %llx] (%llu KB)\n",
+    kprintf("Kernel: [0x%llx - 0x%llx] (%llu KB)\n",
             kernel_phys_start, kernel_phys_end,
             (kernel_phys_end - kernel_phys_start) / 1024);
 
@@ -414,15 +414,15 @@ void pmm_init(multiboot_size_tag *s)
 
     if (pt_reserve_end > EARLY_MAP_LIMIT)
     {
-        kprintf("FATAL: PT reserve [%llx - %llx] exceeds MAP_LIMIT %llx\n",
+        kprintf("FATAL: PT reserve [0x%llx - 0x%llx] exceeds MAP_LIMIT 0x%llx\n",
                 pt_reserve_start, pt_reserve_end, EARLY_MAP_LIMIT);
         PANIC("Not enough space for PT reserve.");
     }
-    kprintf("PT reserve: [%llx - %llx] (%llu KB)\n",
+    kprintf("PT reserve: [0x%llx - 0x%llx] (%llu KB)\n",
             pt_reserve_start, pt_reserve_end, PT_RESERVE_BYTES / 1024);
 
     /* Build identity map up to MAP_LIMIT */
-    kprintf("\nBuilding identity map up to MAP_LIMIT (%llx = %llu MB)\n",
+    kprintf("\nBuilding identity map up to MAP_LIMIT (0x%llx = %llu MB)\n",
             EARLY_MAP_LIMIT, EARLY_MAP_LIMIT / (1024 * 1024));
 
     uint64_t new_pml4_phys = identity_map_all(EARLY_MAP_LIMIT, pt_reserve_start, pt_reserve_end);
@@ -443,8 +443,8 @@ void pmm_init(multiboot_size_tag *s)
         new_pml4[i] = old_pml4[i];
     }
 
-    kprintf("Identity map created, PML4 at %llx\n", new_pml4);
-    kprintf("Switching to new page tables (CR3 = %llx)...\n", new_pml4);
+    kprintf("Identity map created, PML4 at 0x%llx\n", new_pml4);
+    kprintf("Switching to new page tables (CR3 = 0x%llx)...\n", new_pml4);
     write_cr3((uint64_t)new_pml4);
     kprintf("CR3 switched successfully\n");
 
@@ -458,13 +458,13 @@ void pmm_init(multiboot_size_tag *s)
     }
 
     uint64_t bitmap_phys_end = bitmap_phys_start + bitmap_bytes_needed;
-    kprintf("Bitmap region: [%llx - %llx] (%llu KB)\n",
+    kprintf("Bitmap region: [0x%llx - 0x%llx] (%llu KB)\n",
             bitmap_phys_start, bitmap_phys_end, bitmap_bytes_needed / 1024);
 
     /* Ensure bitmap is within mapped area */
     if (bitmap_phys_end > EARLY_MAP_LIMIT)
     {
-        kprintf("WARNING: Bitmap extends beyond MAP_LIMIT (%llx > %llx)\n",
+        kprintf("WARNING: Bitmap extends beyond MAP_LIMIT (0x%llx > 0x%llx)\n",
                 bitmap_phys_end, EARLY_MAP_LIMIT);
     }
 
@@ -509,7 +509,7 @@ void pmm_init(multiboot_size_tag *s)
                 // Mark the pages as used in the PMM bitmap
                 mark_region_used_internal(start, end);
 
-                debug_kprintf("  Used: [%llx - %llx] (Type %u)\n",
+                debug_kprintf("  Used: [0x%llx - 0x%llx] (Type %u)\n",
                               start, end, region->type);
             }
         }

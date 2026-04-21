@@ -306,7 +306,7 @@ static int process_alloc_user_stack(address_space_t *addr_space)
 
         if (vmm_map_page(addr_space, vaddr, phys, VMM_USER | VMM_WRITE | VMM_PRESENT) != 0)
         {
-            debug_kprintf("[ERROR] process_alloc_user_stack: vmm_map_page failed at %lx\n", vaddr);
+            debug_kprintf("[ERROR] process_alloc_user_stack: vmm_map_page failed at 0x%lx\n", vaddr);
             pmm_free_frame(phys);
             return -1;
         }
@@ -390,7 +390,7 @@ int process_load_elf(const char *name, const void *elf_data,
     /* Register with scheduler and process list */
     register_process(proc);
 
-    kprintf("[SUCCESS] Loaded '%s' (PID %u, entry=%lx)\n",
+    kprintf("[SUCCESS] Loaded '%s' (PID %u, entry=0x%lx)\n",
             proc->name, proc->pid, elf_info.entry_point);
 
     return proc->pid;
