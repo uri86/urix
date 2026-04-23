@@ -319,6 +319,23 @@ static int vfs_resolve_parent(const char *path, vnode_t **parent, char *filename
     return 0;
 }
 
+static int vfs_prepare_parent(const char *path, vnode_t **parent, char *filename, size_t filename_size)
+{
+    if (vfs_resolve_parent(path, parent, filename, filename_size) != 0 || !*parent)
+    {
+        debug_kprintf("VFS: Failed to resolve parent for '%s'\n", path);
+        return -1;
+    }
+    if (strlen(filename) == 0 || !(*parent)->ops)
+    {
+        debug_kprintf("VFS: Invalid filename or missing ops\n");
+        vfs_vnode_put(*parent);
+        *parent = NULL;
+        return -1;
+    }
+    return 0;
+}
+
 int vfs_open(const char *path, uint32_t flags, file_t **out)
 {
     if (!path || !out)
@@ -344,26 +361,10 @@ int vfs_open(const char *path, uint32_t flags, file_t **out)
         vnode_t *parent = NULL;
         char filename[VFS_MAX_NAME];
 
-        if (vfs_resolve_parent(path, &parent, filename, sizeof(filename)) != 0)
-        {
-            debug_kprintf("VFS: Failed to resolve parent directory for '%s'\n", path);
+        if (vfs_prepare_parent(path, &parent, filename, sizeof(filename)) != 0)
             return -1;
-        }
 
-        if (!parent)
-        {
-            debug_kprintf("VFS: Parent directory is NULL for '%s'\n", path);
-            return -1;
-        }
-
-        if (strlen(filename) == 0)
-        {
-            debug_kprintf("VFS: Invalid filename\n");
-            vfs_vnode_put(parent);
-            return -1;
-        }
-
-        if (!parent->ops || !parent->ops->create)
+        if (!parent->ops->create)
         {
             debug_kprintf("VFS: Filesystem doesn't support create\n");
             vfs_vnode_put(parent);
@@ -496,26 +497,10 @@ int vfs_mkdir(const char *path)
     vnode_t *parent = NULL;
     char dirname[VFS_MAX_NAME];
 
-    if (vfs_resolve_parent(path, &parent, dirname, sizeof(dirname)) != 0)
-    {
-        debug_kprintf("VFS: Failed to resolve parent directory for '%s'\n", path);
+    if (vfs_prepare_parent(path, &parent, dirname, sizeof(dirname)) != 0)
         return -1;
-    }
 
-    if (!parent)
-    {
-        debug_kprintf("VFS: Parent directory is NULL for '%s'\n", path);
-        return -1;
-    }
-
-    if (strlen(dirname) == 0)
-    {
-        debug_kprintf("VFS: Invalid directory name\n");
-        vfs_vnode_put(parent);
-        return -1;
-    }
-
-    if (!parent->ops || !parent->ops->mkdir)
+    if (!parent->ops->mkdir)
     {
         debug_kprintf("VFS: Filesystem doesn't support mkdir\n");
         vfs_vnode_put(parent);
@@ -600,26 +585,10 @@ int vfs_unlink(const char *path)
     vnode_t *parent = NULL;
     char filename[VFS_MAX_NAME];
 
-    if (vfs_resolve_parent(path, &parent, filename, sizeof(filename)) != 0)
-    {
-        debug_kprintf("VFS: Failed to resolve parent directory for '%s'\n", path);
+    if (vfs_prepare_parent(path, &parent, filename, sizeof(filename)) != 0)
         return -1;
-    }
 
-    if (!parent)
-    {
-        debug_kprintf("VFS: Parent directory is NULL for '%s'\n", path);
-        return -1;
-    }
-
-    if (strlen(filename) == 0)
-    {
-        debug_kprintf("VFS: Invalid filename\n");
-        vfs_vnode_put(parent);
-        return -1;
-    }
-
-    if (!parent->ops || !parent->ops->unlink)
+    if (!parent->ops->unlink)
     {
         debug_kprintf("VFS: Filesystem doesn't support unlink\n");
         vfs_vnode_put(parent);
@@ -646,26 +615,10 @@ int vfs_rmdir(const char *path)
     vnode_t *parent = NULL;
     char dirname[VFS_MAX_NAME];
 
-    if (vfs_resolve_parent(path, &parent, dirname, sizeof(dirname)) != 0)
-    {
-        debug_kprintf("VFS: Failed to resolve parent directory for '%s'\n", path);
+    if (vfs_prepare_parent(path, &parent, dirname, sizeof(dirname)) != 0)
         return -1;
-    }
 
-    if (!parent)
-    {
-        debug_kprintf("VFS: Parent directory is NULL for '%s'\n", path);
-        return -1;
-    }
-
-    if (strlen(dirname) == 0)
-    {
-        debug_kprintf("VFS: Invalid directory name\n");
-        vfs_vnode_put(parent);
-        return -1;
-    }
-
-    if (!parent->ops || !parent->ops->rmdir)
+    if (!parent->ops->rmdir)
     {
         debug_kprintf("VFS: Filesystem doesn't support rmdir\n");
         vfs_vnode_put(parent);
