@@ -19,19 +19,12 @@
 #include <string.h>
 #include <memory/physical/pmm.h>
 #include <memory/physical/identity_map.h>
+#include <memory/memory_utils.h>
 
 /* Page table allocator state */
 static uint64_t pt_alloc_next = 0;
 static uint64_t pt_alloc_limit = 0;
 static uint64_t pt_alloc_start_saved = 0;
-
-static inline unsigned pml4_idx(uint64_t addr) { return (addr >> 39) & 0x1FF; }
-static inline unsigned pdpt_idx(uint64_t addr) { return (addr >> 30) & 0x1FF; }
-static inline unsigned pd_idx(uint64_t addr) { return (addr >> 21) & 0x1FF; }
-static inline unsigned pt_idx(uint64_t addr) { return (addr >> 12) & 0x1FF; }
-
-/* Extract physical address from PTE (clear flags) */
-static inline uint64_t pte_to_phys(uint64_t entry) { return entry & 0x000FFFFFFFFFF000ULL; }
 
 /* Helper to get or allocate a generic mapped page table level */
 static inline uint64_t *get_or_alloc_table(uint64_t *parent_table, unsigned index, uint64_t addr, const char *level_name)
@@ -180,10 +173,10 @@ uint64_t identity_map_all(uint64_t map_end, uint64_t pt_alloc_start, uint64_t pt
             last_reported_mb = current_mb;
         }
 
-        unsigned i4 = pml4_idx(addr);
-        unsigned i3 = pdpt_idx(addr);
-        unsigned i2 = pd_idx(addr);
-        unsigned i1 = pt_idx(addr);
+        unsigned i4 = pml4_index(addr);
+        unsigned i3 = pdpt_index(addr);
+        unsigned i2 = pd_index(addr);
+        unsigned i1 = pt_index(addr);
 
         /* Get or create PDPT */
         uint64_t *pdpt = get_or_alloc_table(pml4, i4, addr, "PDPT");

@@ -22,6 +22,7 @@
 #include <memory/physical/pmm.h>
 #include <memory/physical/identity_map.h>
 #include <memory/vmm.h>
+#include <memory/memory_utils.h>
 #include <lib/print.h>
 #include <string.h>
 #include <stddef.h>
@@ -52,11 +53,6 @@ static uint64_t pt_reserve_end = 0;
 /* regions from multiboot2 header*/
 mem_region regions[MAX_MEM_REGIONS];
 uint32_t regions_count = 0;
-
-/* small helpers */
-static inline uint64_t align_up(uint64_t x, uint64_t a) { return (x + a - 1) & ~(a - 1); }
-static inline uint64_t align_down(uint64_t x, uint64_t a) { return x & ~(a - 1); }
-static inline uint64_t div_round_up(uint64_t x, uint64_t d) { return (x + d - 1) / d; }
 
 static inline int test_frame_internal(uint64_t frame_idx)
 {

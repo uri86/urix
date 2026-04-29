@@ -6,6 +6,7 @@
 #include <memory/kmalloc.h>
 #include <memory/physical/pmm.h>
 #include <memory/vmm.h>
+#include <memory/memory_utils.h>
 #include <lib/panic.h>
 #include <string.h>
 #include <lib/print.h>
@@ -46,7 +47,6 @@ typedef struct slab_class
 } slab_class_t;
 
 static slab_class_t slab_classes[KMALLOC_CLASS_COUNT];
-static inline size_t align_up(size_t x, size_t a) { return (x + a - 1) & ~(a - 1); }
 
 static int size_to_class(size_t size)
 {

@@ -5,6 +5,7 @@
 
 #include <memory/vmm.h>
 #include <memory/physical/pmm.h>
+#include <memory/memory_utils.h>
 #include <lib/print.h>
 #include <string.h>
 #include <lib/panic.h>
@@ -27,30 +28,6 @@ static address_space_t *current_space = NULL;
  * After transition: kernel at 0xFFFF800000100000 (higher-half)
  */
 static int in_higher_half = 0;
-
-/*
- * Extract page table indices from virtual address
- *
- * x86-64 virtual address (48-bit):
- *   Bits 39-47: PML4 index (9 bits) → 512 entries
- *   Bits 30-38: PDPT index (9 bits) → 512 entries
- *   Bits 21-29: PD index   (9 bits) → 512 entries
- *   Bits 12-20: PT index   (9 bits) → 512 entries
- *   Bits 0-11:  Page offset (12 bits) → 4KB page
- */
-static inline uint64_t pml4_index(uint64_t vaddr) { return (vaddr >> 39) & 0x1FF; }
-static inline uint64_t pdpt_index(uint64_t vaddr) { return (vaddr >> 30) & 0x1FF; }
-static inline uint64_t pd_index(uint64_t vaddr) { return (vaddr >> 21) & 0x1FF; }
-static inline uint64_t pt_index(uint64_t vaddr) { return (vaddr >> 12) & 0x1FF; }
-
-/*
- * Extract physical address from page table entry
- * Clears all flag bits (lower 12 bits) to get just the address
- */
-static inline uint64_t pte_to_phys(uint64_t pte)
-{
-    return pte & 0x000FFFFFFFFFF000ULL;
-}
 
 /*
  * Convert physical to virtual
