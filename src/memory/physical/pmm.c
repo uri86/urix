@@ -107,19 +107,36 @@ static void mark_region_used_internal(uint64_t phys_start, uint64_t phys_end)
         set_frame_internal(i);
 }
 
+static void mark_region_free_internal(uint64_t phys_start, uint64_t phys_end)
+{
+    if (phys_end <= phys_start)
+        return;
+    debug_kprintf("Marking region free: [0x%llx - 0x%llx]\n", (uint64_t)phys_start, (uint64_t)phys_end);
+
+    uint64_t frame_start = phys_start / PAGE_SIZE;
+    uint64_t frame_end = phys_end / PAGE_SIZE;
+    if (frame_start >= bitmap_num_frames)
+        return;
+    if (frame_end > bitmap_num_frames)
+        frame_end = bitmap_num_frames;
+
+    for (uint64_t i = frame_start; i < frame_end; ++i)
+        clear_frame_internal(i);
+}
+
 /* Allocate a free 4KiB frame. Returns physical address (page-aligned) or 0 on failure. */
 uint64_t pmm_alloc_frame(void)
 {
     if (!bitmap_set)
     {
-        kprintf("pmm_alloc_frame: ERROR - PMM not initialized (bitmap_set=0)\n");
+        debug_kprintf("pmm_alloc_frame: ERROR - PMM not initialized (bitmap_set=0)\n");
         return 0;
     }
 
     if (free_frames == 0)
     {
-        kprintf("pmm_alloc_frame: ERROR - out of memory (free_frames==0)\n");
-        pmm_print_stats();
+        debug_kprintf("pmm_alloc_frame: ERROR - out of memory (free_frames==0)\n");
+        // pmm_print_stats();
         return 0;
     }
 
@@ -148,7 +165,7 @@ uint64_t pmm_alloc_frame(void)
     }
 
     kprintf("pmm_alloc_frame: ERROR - inconsistent bitmap state (no free bit found)\n");
-    pmm_print_stats();
+    // pmm_print_stats();
     return 0;
 }
 
@@ -160,14 +177,14 @@ void pmm_free_frame(uint64_t phys_addr)
 
     if (phys_addr % PAGE_SIZE)
     {
-        kprintf("pmm_free_frame: ERROR - address 0x%llx not page-aligned\n", (uint64_t)phys_addr);
+        debug_kprintf("pmm_free_frame: ERROR - address 0x%llx not page-aligned\n", (uint64_t)phys_addr);
         return;
     }
 
     uint64_t frame_idx = phys_addr / PAGE_SIZE;
     if (frame_idx >= bitmap_num_frames)
     {
-        kprintf("pmm_free_frame: ERROR - frame 0x%llx out of range\n", (uint64_t)frame_idx);
+        debug_kprintf("pmm_free_frame: ERROR - frame 0x%llx out of range\n", (uint64_t)frame_idx);
         return;
     }
 
@@ -471,11 +488,27 @@ void pmm_init(multiboot_size_tag *s)
     bitmap = (uint8_t *)(uintptr_t)(bitmap_phys_start + KERNEL_VIRT_BASE);
     bitmap_set = 1;
 
-    kprintf("Zeroing bitmap (%llu KB)...\n", bitmap_size_bytes / 1024);
-    memset(bitmap, 0, bitmap_size_bytes);
-    free_frames = bitmap_num_frames;
+    kprintf("Setting bitmap to all 1s (used) (%llu KB)...\n", bitmap_size_bytes / 1024);
+    memset(bitmap, 0xFF, bitmap_size_bytes);
+    free_frames = 0;
 
     kprintf("Bitmap initialized: %llu frames tracked\n", bitmap_num_frames);
+
+    /* Mark available regions from memory map as free */
+    kprintf("Marking available regions as free...\n");
+    for (uint32_t i = 0; i < regions_count; ++i)
+    {
+        mem_region *region = &regions[i];
+        if (region->type == MULTIBOOT_MMAP_AVAILABLE)
+        {
+            uint64_t start = align_up(region->start, PAGE_SIZE);
+            uint64_t end = align_down(region->end, PAGE_SIZE);
+            if (end > start)
+            {
+                mark_region_free_internal(start, end);
+            }
+        }
+    }
 
     /* Reserve regions */
     kprintf("\nMarking reserved regions...\n");
@@ -486,30 +519,7 @@ void pmm_init(multiboot_size_tag *s)
     mark_region_used_internal(bitmap_phys_start, bitmap_phys_end);
     mark_region_used_internal(align_down(VGA_MEMORY, PAGE_SIZE), align_up(VGA_MEMORY + (VGA_WIDTH * VGA_HEIGHT * 2), PAGE_SIZE));
     mark_region_used_internal(0x0, align_up(0x100000, PAGE_SIZE));
-    /* Mark non-available regions from memory map */
-    debug_kprintf("Marking non-available regions using cached map...\n");
-    for (uint32_t i = 0; i < regions_count; ++i)
-    {
-        mem_region *region = &regions[i];
 
-        // Check if the type is NOT available
-        if (region->type != MULTIBOOT_MMAP_AVAILABLE)
-        {
-            // Align the region boundaries to page size
-            uint64_t start = align_down(region->start, PAGE_SIZE);
-            uint64_t end = align_up(region->end, PAGE_SIZE);
-
-            // Only mark the region if it's a valid, non-zero-length block
-            if (end > start)
-            {
-                // Mark the pages as used in the PMM bitmap
-                mark_region_used_internal(start, end);
-
-                debug_kprintf("  Used: [0x%llx - 0x%llx] (Type %u)\n",
-                              start, end, region->type);
-            }
-        }
-    }
 
     kprintf("\n=== PMM Initialization Complete ===\n");
     pmm_print_stats();
