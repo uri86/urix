@@ -1,33 +1,51 @@
 # URIX
 
-A unix like os, built for 64 bit system from the ground up. compatible with linux.
-
 ## Dependencies
+
 1. [brew](https://brew.sh)
 2. make
 
-**Note:** make sure you have make installed otherwise it won't work.
+> [!NOTE]
+> make sure you have the dependencies installed, otherwise the compilation will fail. 
+
+> [!IMPORTANT]
+> This project only compiles on **macOS**.
 
 ## Initial set up on Mac
-For working and compiling on macOS first run:
+
+Before compiling, you will need to download the required toolchain using brew. Keep in mind that **x86_64-elf-gcc** is the only compiler to be used for this project.
+
+You will need to install the following packages:
+
+1. `x86_64-elf-gcc`
+2. `x86_64-elf-binutils`
+3. `i686-elf-grub`
+4. `xquartz`
+
+*(You may also need an emulator like `qemu` to run the generated ISO).*
+
+After the initial packages setup, clone the repository to your local machine and navigate into the project directory:
+
 ```bash
-chmod +x ./setup.sh
-./setup.sh
+git clone https://github.com/uri86/urix.git
+cd urix
 ```
 
-then run:
+Next, you need to make the script that generates the embedded programs executable. This script runs automatically during the build process, but requires the correct permissions first:
+
 ```bash
-make help
+chmod +x userspace/gen_embedded.sh
 ```
 
-## compiling
+## Compiling
 
-if you don't want to use setup.sh, you'll need to download (using brew):
-1. x86_64-elf-gcc
-2. x86_64-elf-binutils
-3. i686-elf-grub
-4. xquartz
+> [!NOTE]
+> The Makefiles handle the compilation of the kernel, the shared libc, and the userspace programs (which are automatically generated into an embedded C array via `gen_embedded.sh` before the kernel is linked).
 
-then run: `make iso`
+To build the project and generate the bootable image, run:
 
-this will generate a file named urix.iso, use that to run the os (using a virtual environment)
+```bash
+make iso
+```
+
+This will generate a file named `urix.iso`. Use that to run the OS using a virtual environment.
