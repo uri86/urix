@@ -369,6 +369,75 @@ static void run_piped(char *left_buf, char *right_buf)
     wait(NULL);
 }
 
+/*
+ * run_ampersand - run two commands, left one silenced and lives until right one finishes.
+ */
+static void run_ampersand(char *left_buf, char *right_buf)
+{
+    int pipefd[2];
+    if (pipe(pipefd) < 0)
+    {
+        println("pipe: failed to create pipe for ampersand");
+        return;
+    }
+
+    pid_t left_pid = fork();
+    if (left_pid == 0)
+    {
+        close(pipefd[0]); // We don't read from the pipe
+        run_cmd(left_buf, -1, pipefd[1]); // Redirect output to pipe
+        exit(0);
+    }
+
+    pid_t right_pid = fork();
+    if (right_pid == 0)
+    {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        run_cmd(right_buf, -1, -1);
+        exit(0);
+    }
+
+    // Shell closes both ends
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    int left_alive = 1;
+    int right_alive = 1;
+
+    while (right_alive)
+    {
+        int status;
+        pid_t p = wait(&status);
+        if (p == right_pid)
+        {
+            right_alive = 0;
+        }
+        else if (p == left_pid)
+        {
+            left_alive = 0;
+        }
+        else if (p < 0)
+        {
+            break;
+        }
+    }
+
+    if (left_alive)
+    {
+        kill(left_pid, 9);
+        while (1)
+        {
+            int status;
+            pid_t p = wait(&status);
+            if (p == left_pid || p < 0)
+            {
+                break;
+            }
+        }
+    }
+}
+
 int main(void)
 {
     shell_pid = getpid();
@@ -419,6 +488,18 @@ int main(void)
                 pipe_pos++;
 
             run_piped(buf, pipe_pos);
+            continue;
+        }
+
+        char *amp_pos = strchr(buf, '&');
+
+        if (amp_pos)
+        {
+            *amp_pos++ = '\0';
+            while (*amp_pos == ' ' || *amp_pos == '\t')
+                amp_pos++;
+
+            run_ampersand(buf, amp_pos);
             continue;
         }
 
