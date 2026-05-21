@@ -213,6 +213,8 @@ static void idle_process(void)
     }
 }
 
+uint64_t uptime_ticks = 0;
+
 void process_init(void)
 {
     kprintf("\n=== Process Manager Init ===\n");
@@ -831,6 +833,9 @@ int process_kill(uint32_t pid)
 
 void process_timer_tick(void)
 {
+    extern uint64_t uptime_ticks;
+    uptime_ticks++;
+
     if (!current_process)
         return;
 

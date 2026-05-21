@@ -48,6 +48,7 @@
 #define SYS_CLEAR_SCREEN 33
 #define SYS_READDIR 34
 #define SYS_ISATTY 35
+#define SYS_UPTIME 36
 
 /* info screen print types */
 #define KPPMM 1

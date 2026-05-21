@@ -636,6 +636,12 @@ static long sys_pipe(int *pipefd)
     return 0;
 }
 
+static long sys_uptime(void)
+{
+    extern uint64_t uptime_ticks;
+    return uptime_ticks / 18;
+}
+
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
 
 static syscall_fn_t syscall_table[SYS_MAX] = {
@@ -666,6 +672,7 @@ static syscall_fn_t syscall_table[SYS_MAX] = {
     [SYS_DUP2] = (syscall_fn_t)sys_dup2,
     [SYS_PIPE] = (syscall_fn_t)sys_pipe,
     [SYS_ISATTY] = (syscall_fn_t)sys_isatty,
+    [SYS_UPTIME] = (syscall_fn_t)sys_uptime,
 };
 
 long syscall_handler(uint64_t syscall_num, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)

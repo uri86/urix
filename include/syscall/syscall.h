@@ -47,7 +47,8 @@
 #define SYS_CLEAR_SCREEN 33
 #define SYS_READDIR 34
 #define SYS_ISATTY 35
-#define SYS_MAX 36
+#define SYS_UPTIME 36
+#define SYS_MAX 37
 
 /* file descriptor constants */
 #define STDIN_FILENO 0

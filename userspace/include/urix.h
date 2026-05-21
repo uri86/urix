@@ -201,4 +201,9 @@ static inline void print_pcb(int pid)
     syscall2(SYS_KPS, KPPCB, pid);
 }
 
+static inline long uptime(void)
+{
+    return syscall0(SYS_UPTIME);
+}
+
 #endif /* URIX_H */
