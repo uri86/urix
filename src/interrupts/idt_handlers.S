@@ -16,8 +16,8 @@
 .global isr\num
 .type isr\num, @function
 isr\num:
-    pushq $0                  # Push dummy error code
-    pushq $\num               # Push interrupt number
+    pushq $0 # Push dummy error code
+    pushq $\num # Push interrupt number
     jmp isr_common_stub
 .endm
 
@@ -26,7 +26,7 @@ isr\num:
 .global isr\num
 .type isr\num, @function
 isr\num:
-    pushq $\num               # Push interrupt number
+    pushq $\num # Push interrupt number
     jmp isr_common_stub
 .endm
 
@@ -35,8 +35,8 @@ isr\num:
 .global isr\num
 .type isr\num, @function
 isr\num:
-    pushq $0                  # Push dummy error code
-    pushq $\num               # Push interrupt number
+    pushq $0 # Push dummy error code
+    pushq $\num # Push interrupt number
     jmp irq_common_stub
 .endm
 

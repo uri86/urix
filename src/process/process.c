@@ -276,7 +276,7 @@ int process_create(uint64_t entry_point, const char *name, process_priority_t pr
         proc->context.ss = KERNEL_DS;
         uint64_t rsp = proc->kernel_stack_virt + PAGE_SIZE;
         rsp &= ~0xFULL; /* 16-byte alignment */
-        rsp -= 8;       /* fake return address */
+        rsp -= 8; /* fake return address */
         proc->context.rsp = rsp;
         proc->context.rbp = rsp;
     }
@@ -821,11 +821,11 @@ int process_kill(uint32_t pid)
     // Remove from ready queue if present
     remove_from_ready_queue(p);
 
-    /* Remove from all_processes list */
+    // Remove from all_processes list
     remove_from_all_processes(p);
     __asm__ volatile("sti");
 
-    /* Cleanup resources */
+    // Cleanup resources
     cleanup_process_resources(p);
 
     return 0;

@@ -68,8 +68,7 @@ void vmm_init(void);
  *
  * This function:
  *  1. Removes identity mapping
- *  2. Updates all kernel pointers to use higher-half addresses
- *  3. Flushes TLB
+ *  2. Flushes TLB
  */
 void vmm_finish_init(void);
 
@@ -93,7 +92,7 @@ address_space_t *vmm_create_address_space(void);
  *   3. Maps it into dst with the same flags
  *
  * src: Source address space (parent)
- * dst: Destination address space (child) - must already exist
+ * dst: Destination address space (child)
  *
  * Returns: 0 on success, -1 on failure
  */
@@ -105,7 +104,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst);
  * Frees all page tables in user space.
  * Does NOT touch kernel mappings (shared across all processes).
  *
- * as: address space to destroy (must not be currently active)
+ * as: address space to destroy
  */
 void vmm_destroy_address_space(address_space_t *as);
 
@@ -113,8 +112,6 @@ void vmm_destroy_address_space(address_space_t *as);
  * vmm_switch_address_space - Switch to a different address space
  *
  * Loads the PML4 into CR3, changing the active page tables.
- * Kernel mappings remain the same.
- * User mappings change.
  *
  * as: address space to switch to (NULL = kernel space only)
  */
@@ -133,14 +130,12 @@ void vmm_switch_address_space(address_space_t *as);
  *
  * Returns 0 on success, -1 on failure.
  */
-int vmm_map_page(address_space_t *as, uint64_t virt_addr,
-                 uint64_t phys_addr, uint64_t flags);
+int vmm_map_page(address_space_t *as, uint64_t virt_addr, uint64_t phys_addr, uint64_t flags);
 
 /**
  * vmm_unmap_page - Unmap a virtual page
  *
  * Removes the page table entry for a virtual address.
- * Does NOT free the physical frame (caller's responsibility).
  * Invalidates TLB for this address.
  *
  * as: address space (NULL = current/kernel)
@@ -187,8 +182,6 @@ address_space_t *vmm_get_kernel_space(void);
  *
  * Uses the direct mapping at KERNEL_VIRT_BASE.
  * Only works for addresses within mapped physical memory.
- *
- * Example: phys_to_virt(0x100000) → 0xFFFFFFFF80100000
  */
 static inline void *phys_to_virt(uint64_t phys)
 {
@@ -200,8 +193,6 @@ static inline void *phys_to_virt(uint64_t phys)
  *
  * Only works for kernel direct-mapped addresses (KERNEL_VIRT_BASE+).
  * Does NOT work for arbitrary virtual addresses.
- *
- * Example: virt_to_phys(0xFFFFFFFF80100000) → 0x100000
  */
 static inline uint64_t virt_to_phys(void *virt)
 {

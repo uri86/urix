@@ -59,7 +59,7 @@ struct vfs_ops
 };
 
 /*
- * V-Node (Virtual Node)
+ * V-Node
  * Represents an active file/directory in memory.
  */
 struct vnode
@@ -70,7 +70,7 @@ struct vnode
     uint32_t refcount;
     mount_t *mount; // The filesystem this node belongs to
     mount_t *mounted_here; // A filesystem mounted over this directory
-    void *fs_data; /* Filesystem specific data */
+    void *fs_data; // Filesystem specific data
     struct vfs_ops *ops;
 };
 
@@ -96,7 +96,7 @@ struct mount
 {
     filesystem_t *fs;
     vnode_t *root;
-    void *fs_data; /* FS specific mount data */
+    void *fs_data; // FS specific mount data
     char *mountpoint;
     mount_t *next;
     
@@ -106,7 +106,7 @@ struct mount
 };
 
 /*
- * Open File Handle
+ * Open File
  */
 typedef struct file
 {
@@ -141,7 +141,6 @@ int vfs_mkdir(const char *path);
 int vfs_unlink(const char *path);
 int vfs_rmdir(const char *path);
 
-// syscall KP function
 int vfs_kp(int flag, long arg);
 
 #endif /* VFS_H */

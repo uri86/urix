@@ -1,5 +1,5 @@
 /**
- * Licensed under MIT License - URIX poroject
+ * Licensed under MIT License - URIX project
  * ls.c - List directory contents
  * Usage: ls [-l] [-a] [path]
  */

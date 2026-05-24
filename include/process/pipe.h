@@ -56,7 +56,7 @@ void pipe_release(pipe_t *p, int is_write_end);
 /**
  * pipe_write - Write bytes into the pipe ring buffer.
  *
- * Blocks (yields) if the buffer is full.
+ * Blocks if the buffer is full.
  * Returns number of bytes written, or -1 if the read end is closed.
  */
 int pipe_write(pipe_t *p, const void *buf, size_t count);
@@ -64,7 +64,7 @@ int pipe_write(pipe_t *p, const void *buf, size_t count);
 /**
  * pipe_read - Read bytes from the pipe ring buffer.
  *
- * Blocks (yields) if the buffer is empty and the
+ * Blocks if the buffer is empty and the
  * write end is still open.
  * Returns number of bytes read, or 0 on EOF (write end closed + empty).
  */

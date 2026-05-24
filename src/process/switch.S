@@ -132,8 +132,8 @@ normal_kernel_restore:
     ret
 
 restore_user_mode:
-    # Build iretq frame on the CURRENT kernel stack (do NOT switch RSP first).
-    # iretq itself will atomically load RSP from the frame when it drops to ring 3.
+    # Build iretq frame on the kernel stack.
+    # iretq tomically loads RSP from the frame when it drops to ring 3.
     pushq 0x98(%rsi)           # SS
     pushq 0x90(%rsi)           # RSP (user stack pointer)
     pushq 0x88(%rsi)           # RFLAGS

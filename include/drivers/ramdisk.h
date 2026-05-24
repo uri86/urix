@@ -15,7 +15,7 @@
 /**
  * ramdisk_create - Create a new RAM disk
  *
- * name:    Device name (e.g., "ram0")
+ * name: Device name
  * size_mb: Size in megabytes
  * out_dev: Pointer to receive the device structure
  *
@@ -26,9 +26,9 @@ int ramdisk_create(const char *name, size_t size_mb, blockdev_t **out_dev);
 /**
  * ramdisk_load_image - Load a raw filesystem image into the RAM disk
  *
- * dev:   Pointer to the RAM disk device
+ * dev: Pointer to the RAM disk device
  * image: Source buffer
- * size:  Size of source buffer
+ * size: Size of source buffer
  *
  * Returns 0 on success, -1 on failure.
  */

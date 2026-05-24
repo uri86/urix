@@ -5,8 +5,6 @@
  *  - define IDT entry and descriptor structures
  *  - provide IDT initialization interface
  *  - expose exception handler registration
- * Notes:
- *  - supports 256 interrupt vectors (0-255)
  */
 
 #ifndef IDT_H

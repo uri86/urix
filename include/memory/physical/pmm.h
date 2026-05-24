@@ -4,7 +4,6 @@
  * Responsibilities:
  *  - declare PMM initialization and management functions
  *  - provide allocation and freeing of 4KB physical frames
- *  - expose functions to query total and free frames
  *  - reserve space for page tables and early identity mapping
  *  - provide diagnostic function to print PMM statistics
  * Notes:
@@ -33,7 +32,7 @@
 
 #define MAX_BITMAP_BYTES (MAX_PHYS_ADDR / PAGE_SIZE / 8)
 
-// Reserve space for page tables that the kernel needs to set up *before* it can use the VMM.
+// Reserve space for page tables that the kernel needs to set up before it can use the VMM.
 // 8 MiB is a safe, conservative size that should fit in the first memory region.
 #define PT_RESERVE_BYTES (8ULL * 1024 * 1024)
 

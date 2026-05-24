@@ -12,7 +12,6 @@
 #include <lib/utils.h>
 /*
  * Global kernel address space
- * All processes copy kernel mappings from this space
  */
 static address_space_t kernel_space;
 
@@ -22,11 +21,6 @@ static address_space_t kernel_space;
  */
 static address_space_t *current_space = NULL;
 
-/*
- * Flag: are we in higher-half mode?
- * Before transition: kernel at 0x100000 (identity)
- * After transition: kernel at 0xFFFF800000100000 (higher-half)
- */
 static int in_higher_half = 0;
 
 /*
@@ -70,17 +64,11 @@ void vmm_init(void)
 {
     kprintf("\n=== Initializing VMM ===\n");
 
-    /*
-     * Read current CR3
-     * This is the identity-mapped PML4 created by PMM during boot
-     */
+    // Read current cr3.
     uint64_t current_pml4_phys = read_cr3();
     kprintf("Current PML4 (identity): 0x%llx\n", current_pml4_phys);
 
-    /*
-     * Allocate new PML4 for kernel space
-     * This will have both identity mapping AND higher-half mapping
-     */
+    // allocate new PML4 for kernel space
     kernel_space.pml4_phys = pmm_alloc_frame();
     if (!kernel_space.pml4_phys)
     {
@@ -135,10 +123,7 @@ void vmm_init(void)
 
     kprintf("Higher-half mapping complete (%llu pages)\n", pages_mapped);
 
-    /*
-     * Switch to new page tables
-     * After this, we have BOTH identity and higher-half mappings active
-     */
+    // switch to new page tables
     kprintf("Switching to new page tables (CR3 = 0x%llx)...\n", kernel_space.pml4_phys);
     write_cr3(kernel_space.pml4_phys);
     current_space = &kernel_space;
@@ -175,7 +160,7 @@ void vmm_finish_init(void)
         kernel_space.pml4_virt[i] = 0;
     }
 
-    // Flush TLB (reload CR3) - use the PHYSICAL address for CR3
+    // Flush TLB (reload CR3)
     write_cr3(kernel_space.pml4_phys);
 
     in_higher_half = 1;
@@ -209,7 +194,6 @@ address_space_t *vmm_create_address_space(void)
 
     /*
      * Copy kernel mappings (upper half) from kernel space
-     * This ensures all processes can access kernel code/data
      */
     uint64_t *kernel_pml4 = kernel_space.pml4_virt;
     for (int i = 256; i < 512; i++)

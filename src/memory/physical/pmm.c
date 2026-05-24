@@ -342,7 +342,6 @@ void pmm_init(multiboot_size_tag *s)
             uint32_t entry_count = (mmap_tag->size - sizeof(*mmap_tag)) / mmap_tag->entry_size;
             kprintf("Memory map (%u entries):\n", entry_count);
 
-            // CORRECT: Use byte-level pointer arithmetic with entry_size
             multiboot_mmap_entry *entry = mmap_tag->entries;
 
             for (uint32_t i = 0; i < entry_count; ++i)

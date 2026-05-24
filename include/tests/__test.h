@@ -6,10 +6,6 @@
  *  - provide assertion macros for kernel tests
  *  - provide standardized PASS/FAIL reporting
  *  - enforce fail-fast behavior on test failure
- *
- * Failure Model:
- *  - Any failed assertion prints diagnostic information
- *  - The kernel halts immediately to preserve system state
  */
 
 #ifndef __TEST_H

@@ -26,10 +26,10 @@
 #endif
 
 #define CONF_OK 0
-#define CONF_ERR -1      /* I/O error */
+#define CONF_ERR -1 /* I/O error */
 #define CONF_NOTFOUND -2 /* key does not exist */
-#define CONF_FULL -3     /* no space for entry */
-#define CONF_TOOLONG -4  /* key or value too long */
+#define CONF_FULL -3 /* no space for entry */
+#define CONF_TOOLONG -4 /* key or value too long */
 
 typedef struct
 {

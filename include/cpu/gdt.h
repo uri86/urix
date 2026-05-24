@@ -132,9 +132,9 @@ typedef struct tss
  *
  * Sets up a proper GDT with:
  *  - Null descriptor
- *  - Kernel code segment (64-bit, ring 0)
+ *  - Kernel code segment (ring 0)
  *  - Kernel data segment (ring 0)
- *  - User code segment (64-bit, ring 3)
+ *  - User code segment (ring 3)
  *  - User data segment (ring 3)
  *  - TSS (Task State Segment)
  *

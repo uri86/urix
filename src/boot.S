@@ -144,7 +144,7 @@ fill_p2_table:
 
 enable_paging:
     movl %cr4, %eax
-    orl $0x20, %eax           # set PAE (bit 5)
+    orl $0x20, %eax # set PAE (bit 5)
     movl %eax, %cr4
 
     movl $(p4_table - KERNEL_VIRT_BASE), %eax
@@ -157,7 +157,7 @@ enable_paging:
 
     # Finally, enable paging by setting CR0.PG.
     movl %cr0, %eax
-    orl $0x80000000, %eax    # set PG bit (bit 31)
+    orl $0x80000000, %eax # set PG bit (bit 31)
     movl %eax, %cr0
 
     ret

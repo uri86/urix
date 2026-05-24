@@ -46,10 +46,6 @@
 #define MULTIBOOT_MMAP_RMH 4  // Reserved Memory which needs to be preserved on Hibernation
 #define MULTIBOOT_MMAP_DRM 5  // Defective RAM modules
 
-/* -------------------------------------------------------------------------- */
-/* Multiboot2 Structures                                                      */
-/* -------------------------------------------------------------------------- */
-
 /* First tag */
 typedef struct multiboot_size_tag {
     uint32_t total_size;

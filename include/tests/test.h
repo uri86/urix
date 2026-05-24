@@ -4,10 +4,6 @@
  *
  * Responsibilities:
  *  - expose a single entry point for running all kernel tests
- *
- * Design:
- *  - Tests are executed sequentially during early kernel boot.
- *  - Any failure halts the kernel immediately.
  */
 
 #ifndef TEST_H

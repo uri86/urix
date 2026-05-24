@@ -44,10 +44,10 @@ struct blockdev
     uint32_t sector_size;
     uint64_t sector_count;
 
-    void *driver_data;   /* Private driver data */
+    void *driver_data;
     blockdev_ops_t *ops; /* Operations table */
 
-    blockdev_t *next; /* Linked list next pointer */
+    blockdev_t *next;
 };
 
 /**

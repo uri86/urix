@@ -33,13 +33,13 @@
 #define EM_X86_64 62
 
 /* Program Header Types */
-#define PT_NULL 0    /* Unused entry */
+#define PT_NULL 0
 #define PT_LOAD 1
 #define PT_DYNAMIC 2
 #define PT_INTERP 3
 #define PT_NOTE 4
-#define PT_SHLIB 5   /* Reserved */
-#define PT_PHDR 6    /* Program header table */
+#define PT_SHLIB 5 
+#define PT_PHDR 6
 #define PT_TLS 7
 
 #define PF_X 0x1
@@ -56,8 +56,8 @@
 #define SHT_DYNAMIC 6
 #define SHT_NOTE 7
 #define SHT_NOBITS 8  /* BSS section */
-#define SHT_REL 9     /* Relocation entries */
-#define SHT_DYNSYM 11 /* Dynamic symbol table */
+#define SHT_REL 9 
+#define SHT_DYNSYM 11
 
 /* ELF64 Header */
 typedef struct

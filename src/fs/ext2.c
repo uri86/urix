@@ -153,7 +153,6 @@ static void ext2_trace_path(mount_t *mnt, const char *path)
 {
     ext2_mount_t *m = (ext2_mount_t *)mnt->fs_data;
 
-    /* --- Superblock header --- */
     kprintf("\n=== VFS Path Trace: '%s' ===\n", path);
     kprintf("Filesystem : ext2  Magic: 0x%x  Block size: %u\n",
             m->sb.s_magic, m->block_size);
@@ -161,14 +160,14 @@ static void ext2_trace_path(mount_t *mnt, const char *path)
             m->sb.s_inodes_count, m->sb.s_free_inodes_count,
             m->sb.s_blocks_count, m->sb.s_free_blocks_count);
 
-    /* Start at root inode (inode 2) */
+    /* Start at root inode */
     uint32_t cur_ino = EXT2_ROOT_INO;
     kprintf("[/]  inode %u  (root)\n", cur_ino);
 
     /* Walk each path component */
     char comp[256];
     const char *p = path;
-    while (*p == '/') p++;       /* skip leading slash */
+    while (*p == '/') p++; /* skip leading slash */
 
     uint8_t *buf = kmalloc(m->block_size);
     if (!buf) { kprintf("Ext2 trace: out of memory\n"); return; }
@@ -210,7 +209,6 @@ static void ext2_trace_path(mount_t *mnt, const char *path)
         kprintf("  -> entered inode %u  ('%s')\n\n", cur_ino, comp);
     }
 
-    /* --- Destination inode details --- */
     ext2_inode_t dest;
     if (ext2_read_inode(m, cur_ino, &dest) == 0)
     {
@@ -357,7 +355,7 @@ static int find_free_bit(uint8_t *map, uint32_t size_bytes)
     for (uint32_t i = 0; i < size_bytes; i++)
     {
         if (map[i] == 0xFF)
-            continue;               // continues forward if the byte is full
+            continue; // continues forward if the byte is full
         for (int j = 0; j < 8; j++) // searches for the the empty bit
         {
             if (!((map[i] >> j) & 1))
@@ -367,7 +365,6 @@ static int find_free_bit(uint8_t *map, uint32_t size_bytes)
     return -1; // return -1 if no free bit was found
 }
 
-/* Both functions below assume that map is not null. */
 static void set_bit(uint8_t *map, int bit) { map[bit / 8] |= (1 << (bit % 8)); }
 static void clear_bit(uint8_t *map, int bit) { map[bit / 8] &= ~(1 << (bit % 8)); }
 
@@ -442,8 +439,7 @@ static void free_block(ext2_mount_t *m, uint32_t block)
 /**
  * This function performs two passes:
  * 1. Scans for duplicates to ensure the name doesn't already exist.
- * 2. Scans for a free slot. If a slot (gap) is found by splitting an existing
- * entry (that has extra padding in rec_len), it inserts there.
+ * 2. Scans for a free slot. If a slot is found by splitting an existing entry (that has extra padding in rec_len), it inserts there.
  * Otherwise, it allocates a new block for the directory.
  *
  * m - Mounted filesystem context.
@@ -451,7 +447,7 @@ static void free_block(ext2_mount_t *m, uint32_t block)
  * new_ino - The inode number of the new file/directory being added.
  * name - The name of the new entry.
  * type - The type of entry (1=File, 2=Directory).
- *  returns an int, 0 on success, -1 on failure.
+ * returns an int, 0 on success, -1 on failure.
  */
 static int dir_add_entry(ext2_mount_t *m, uint32_t dir_ino, uint32_t new_ino, const char *name, uint8_t type)
 {
@@ -518,7 +514,7 @@ static int dir_add_entry(ext2_mount_t *m, uint32_t dir_ino, uint32_t new_ino, co
             // Calculate space needed for the new entry
             uint32_t needed = (8 + strlen(name) + 3) & ~3;
 
-            // If the current entry's record length is larger than what it needs plus what we need, we can split it.
+            // If the current entry's record length is larger than what it needs plus what the new entry needs, we split it.
             if (d->rec_len >= min_len + needed)
             {
                 uint32_t old_len = d->rec_len;
@@ -691,8 +687,8 @@ int ext2_create_filesystem(blockdev_t *dev)
     root.i_mode = 0x41ED; // Directory (0x4000) + chmod 755
     root.i_size = 1024;
     root.i_links_count = 2; // Link to parent and self
-    root.i_blocks = 2;      // 512-byte sectors count
-    root.i_block[0] = 50;   // Data located at block 50
+    root.i_blocks = 2; // 512-byte sectors count
+    root.i_block[0] = 50; // Data located at block 50
 
     // Write root inode to inode table (offset 128 bytes, since it's index 2)
     memset(buf, 0, BLOCK_SIZE);
@@ -724,7 +720,7 @@ int ext2_create_filesystem(blockdev_t *dev)
 }
 
 /**
- * Creates a new file in the VFS.
+ * Creates a new file.
  *
  * dir - Parent directory vnode.
  * name - Name of the file to create.
@@ -757,7 +753,7 @@ static int ext2_create(vnode_t *dir, const char *name, vnode_t **res)
 
     ext2_inode_t node;
     memset(&node, 0, sizeof(node));
-    node.i_mode = 0x81A4; // Regular File (0x8000) + 644 permissions
+    node.i_mode = 0x81A4;
     node.i_size = 0;
     node.i_links_count = 1;
     node.i_blocks = 0;
@@ -893,7 +889,7 @@ static int ext2_mkdir(vnode_t *dir, const char *name, vnode_t **res)
 }
 
 /**
- * Unlinks (deletes) a file.
+ * Unlinks a file.
  * Releases all blocks associated with the file and marks the inode as free.
  *
  * dir - Parent directory vnode.
@@ -1307,7 +1303,7 @@ static int ext2_mount(const char *devname, mount_t **mnt)
     m->inode_size = (sb.s_rev_level >= 1) ? sb.s_inode_size : 128;
 
     m->bgdt = kmalloc(m->block_size);
-    read_fs_block(m, 2, m->bgdt); // Assumes 1k blocks, BGD usually at block 2
+    read_fs_block(m, 2, m->bgdt);
 
     *mnt = kmalloc(sizeof(mount_t));
     (*mnt)->fs_data = m;
@@ -1315,7 +1311,7 @@ static int ext2_mount(const char *devname, mount_t **mnt)
 
     vnode_t *root = kmalloc(sizeof(vnode_t));
     memset(root, 0, sizeof(vnode_t));
-    root->inode = 2; // Ext2 Root Inode is always 2
+    root->inode = 2;
     root->type = VFS_DIR;
     root->mount = *mnt;
     root->ops = &ext2_ops;

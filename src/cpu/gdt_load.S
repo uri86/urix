@@ -27,7 +27,6 @@ gdt_load:
     lgdt (%rdi)
 
     # Reload data segment registers
-    # All data segments (DS, ES, FS, GS, SS) need to be reloaded
     # with the new kernel data segment selector (0x10 = GDT_KERNEL_DATA)
     movw $0x10, %ax
     movw %ax, %ds
@@ -40,10 +39,10 @@ gdt_load:
     # Push new CS selector (0x08 = GDT_KERNEL_CODE)
     # Push return address (.reload_cs label)
     # Execute far return (RETFQ = return far 64-bit)
-    popq %rax               # Save return address
-    pushq $0x08             # Push new CS selector
-    pushq %rax              # Push return address back
-    lretq                   # Far return: pops RIP then CS
+    popq %rax # Save return address
+    pushq $0x08 # Push new CS selector
+    pushq %rax # Push return address back
+    lretq # Far return: pops RIP then CS
 
 #
 # tss_load - Load the Task State Segment

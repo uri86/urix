@@ -79,8 +79,6 @@ void keyboard_init(void);
  *
  * Returns the next character from the keyboard buffer.
  * If buffer is empty, returns 0.
- *
- * Returns: ASCII character or special key code, 0 if no input
  */
 char keyboard_getchar(void);
 

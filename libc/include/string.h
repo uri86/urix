@@ -38,7 +38,7 @@ char *strcpy(char *dest, const char *src);
  * c: Integer representation of a character
  * 
  * Returns a pointer to the first appearance of the character c in the string.
- * If doesn't find the character, or the string is empty, returns NULL.
+ * If it doesn't find the character, or the string is empty, returns NULL.
  */
 char *strchr(const char *s, int c);
 
@@ -48,7 +48,6 @@ char *strchr(const char *s, int c);
  * str: Pointer to the string buffer.
  * len: Number of characters to reverse.
  *
- * Used primarily by numeric conversion functions.
  * Caller must ensure the buffer is writable and properly sized.
  */
 void reverse(char *str, size_t len);
@@ -61,7 +60,6 @@ void reverse(char *str, size_t len);
  * base:  Numeral base (valid range: 2–36).
  *
  * Returns buffer containing a null-terminated string representation.
- * Supports negative values only in base 10.
  * If base is invalid, writes an empty string.
  */
 char *itoa(int64_t num, char *buffer, int base);
@@ -203,7 +201,7 @@ long atol(const char *str);
  *
  * str: Pointer to the null-terminated string to convert.
  * endptr: If not NULL, stores the address of the first invalid character.
- * base: The base for conversion (2-36), or 0 for auto-detection.
+ * base: The base for conversion (2-36.
  *
  * Converts the string to long, handling sign, base, and stopping at invalid chars.
  *

@@ -40,8 +40,8 @@ void *kmalloc(size_t size);
 
 /*
  * kfree - Free a block of memory previously allocated with kmalloc().
- * Parameters:
- *  - ptr: Pointer previously returned by kmalloc().
+ *
+ * ptr: Pointer previously returned by kmalloc().
  *
  */
 void kfree(void *ptr);

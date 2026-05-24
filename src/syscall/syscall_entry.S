@@ -21,7 +21,7 @@ syscall_frame_rsp:         .quad 0
 .global syscall_entry
 .type syscall_entry, @function
 syscall_entry:
-    # Reload kernel data segments — on entry from ring 3 these are null
+    # Reload kernel data segments
     pushq %rax
     movw $0x10, %ax
     movw %ax, %ds
@@ -43,7 +43,7 @@ syscall_entry:
     pushq %rdx
     pushq %rcx
     pushq %rbx
-    pushq %rax     # syscall number
+    pushq %rax # syscall number
 
     # Save user-mode iretq frame values for sys_fork
     movq 120(%rsp), %rax

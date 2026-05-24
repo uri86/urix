@@ -17,7 +17,7 @@
  *  2. Kernel data segment
  *  3. User code segment
  *  4. User data segment
- *  5-6. TSS (takes 2 entries in 64-bit mode)
+ *  5-6. TSS
  */
 static gdt_entry_t gdt[7];
 static gdt_ptr_t gdt_ptr;

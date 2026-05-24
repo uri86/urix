@@ -211,7 +211,7 @@ void process_print_pcb(int pid);
  * old_context: Where to save current CPU state (can be NULL)
  * new_context: CPU state to restore
  *
- * Implemented in assembly (switch.S):
+ * The function:
  *  - Saves all general purpose registers
  *  - Switches stack pointer
  *  - Restores new context registers
