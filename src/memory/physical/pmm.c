@@ -56,8 +56,11 @@ uint32_t regions_count = 0;
 
 static inline int test_frame_internal(uint64_t frame_idx)
 {
+    // check if bitmap is initialized and frame index is within bounds
     if (!bitmap || frame_idx >= bitmap_num_frames)
         return 1;
+
+    // calculate byte index and bit mask for the frame index
     uint64_t byte_idx = frame_idx >> 3;
     uint8_t bit = 1U << (frame_idx & 7);
     return (bitmap[byte_idx] & bit) != 0;
@@ -65,10 +68,15 @@ static inline int test_frame_internal(uint64_t frame_idx)
 
 static inline void set_frame_internal(uint64_t frame_idx)
 {
+    // check if bitmap is initialized and frame index is within bounds
     if (!bitmap || frame_idx >= bitmap_num_frames)
         return;
+
+    // calculate byte index and bit mask for the frame index
     uint64_t byte_idx = frame_idx >> 3;
     uint8_t bit = 1U << (frame_idx & 7);
+
+    // if the frame is not already set, set it and decrement free_frames
     if (!(bitmap[byte_idx] & bit))
     {
         bitmap[byte_idx] |= bit;
@@ -79,10 +87,15 @@ static inline void set_frame_internal(uint64_t frame_idx)
 
 static inline void clear_frame_internal(uint64_t frame_idx)
 {
+    // check if bitmap is initialized and frame index is within bounds
     if (!bitmap_set || frame_idx >= bitmap_num_frames)
         return;
+    
+    // calculate byte index and bit mask for the frame index
     uint64_t byte_idx = frame_idx >> 3;
     uint8_t bit = 1U << (frame_idx & 7);
+
+    // if the frame is currently set, clear it and increment free_frames
     if (bitmap[byte_idx] & bit)
     {
         bitmap[byte_idx] &= ~bit;
@@ -96,8 +109,10 @@ static void mark_region_used_internal(uint64_t phys_start, uint64_t phys_end)
         return;
     kprintf("Marking region used: [0x%llx - 0x%llx]\n", (uint64_t)phys_start, (uint64_t)phys_end);
 
+    // calculate frame range and mark each frame as used
     uint64_t frame_start = phys_start / PAGE_SIZE;
     uint64_t frame_end = div_round_up(phys_end, PAGE_SIZE);
+
     if (frame_start >= bitmap_num_frames)
         return;
     if (frame_end > bitmap_num_frames)
@@ -113,8 +128,10 @@ static void mark_region_free_internal(uint64_t phys_start, uint64_t phys_end)
         return;
     debug_kprintf("Marking region free: [0x%llx - 0x%llx]\n", (uint64_t)phys_start, (uint64_t)phys_end);
 
+    // calculate frame range and mark each frame as free
     uint64_t frame_start = phys_start / PAGE_SIZE;
     uint64_t frame_end = phys_end / PAGE_SIZE;
+
     if (frame_start >= bitmap_num_frames)
         return;
     if (frame_end > bitmap_num_frames)
@@ -141,19 +158,25 @@ uint64_t pmm_alloc_frame(void)
     }
 
     uint64_t start = last_alloc_byte;
+    // loop through bitmap starting from last allocation point to find a free frame
     for (uint64_t offset = 0; offset < bitmap_size_bytes; ++offset)
     {
         uint64_t byte_idx = (start + offset) % bitmap_size_bytes;
 
+        // find the first byte that has a free bit
         if (bitmap[byte_idx] != 0xFF)
         {
+            // loop through bits in this byte to find the first free frame
             for (int bit = 0; bit < 8; ++bit)
             {
                 uint8_t mask = 1U << bit;
                 if (!(bitmap[byte_idx] & mask))
                 {
+                    // mark this frame as used
                     bitmap[byte_idx] |= mask;
                     last_alloc_byte = byte_idx;
+
+                    // calculate the frame index and return its physical address
                     uint64_t frame_idx = (byte_idx << 3) + bit;
                     if (frame_idx >= bitmap_num_frames)
                         return 0;
@@ -193,7 +216,6 @@ void pmm_free_frame(uint64_t phys_addr)
     clear_frame_internal(frame_idx);
 }
 
-/* Accessors */
 uint64_t pmm_get_free_frames(void) { return free_frames; }
 uint64_t pmm_get_total_frames(void) { return total_frames; }
 
@@ -369,15 +391,18 @@ void pmm_init(multiboot_size_tag *s)
                     if (end > start)
                     {
                         uint64_t frames = (end - start) / PAGE_SIZE;
+                        // update totals
                         total_frames += frames;
                         usable_bytes += (end - start);
                         if (end > highest_usable_addr)
                             highest_usable_addr = end;
                     }
                 }
+                // advance to the next entry
                 entry = (multiboot_mmap_entry *)((uint8_t *)entry + mmap_tag->entry_size);
             }
         }
+        // advance to the next tag
         tag = (multiboot_tag *)((uint8_t *)tag + ((tag->size + 7) & ~7));
     }
 

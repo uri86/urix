@@ -8,6 +8,7 @@
 .global syscall_saved_user_ss
 .global syscall_frame_rsp
 
+# saved regisers for restoration before iretq
 syscall_saved_user_rip:    .quad 0
 syscall_saved_user_rsp:    .quad 0
 syscall_saved_user_rflags: .quad 0
@@ -73,7 +74,7 @@ syscall_entry:
 
     # arg6 as stack argument
     pushq 64(%rsp)
-    pushq $0               # stack alignment
+    pushq $0 # stack alignment
 
     call syscall_handler
 

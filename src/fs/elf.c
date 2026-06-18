@@ -18,9 +18,11 @@
 
 int elf_validate(const elf64_ehdr_t *hdr)
 {
+    // check for null pointer
     if (!hdr)
         return -1;
 
+    // check ELF magic number
     if (hdr->e_ident[0] != 0x7F ||
         hdr->e_ident[1] != 'E' ||
         hdr->e_ident[2] != 'L' ||
@@ -30,24 +32,28 @@ int elf_validate(const elf64_ehdr_t *hdr)
         return -1;
     }
 
+    // make sure it's a 64-bit little-endian executable for x86-64
     if (hdr->e_ident[4] != ELFCLASS64)
     {
         debug_kprintf("ELF: Not a 64-bit ELF\n");
         return -1;
     }
 
+    // check the data encoding
     if (hdr->e_ident[5] != ELFDATA2LSB)
     {
         debug_kprintf("ELF: Not little endian\n");
         return -1;
     }
 
+    // check the type
     if (hdr->e_type != ET_EXEC && hdr->e_type != ET_DYN)
     {
         debug_kprintf("ELF: Not an executable (type=%u)\n", hdr->e_type);
         return -1;
     }
 
+    // make sure it's for the x86-64 architecture
     if (hdr->e_machine != EM_X86_64)
     {
         debug_kprintf("ELF: Not x86-64 architecture\n");
@@ -62,11 +68,13 @@ static int elf_copy_to_mapped(address_space_t *addr_space, uint64_t dst_vaddr, c
 {
     uint64_t copied = 0;
 
+    // Loop through the size in chunks that fit within a page
     while (copied < size)
     {
         uint64_t page_vaddr = PAGE_ALIGN_DOWN(dst_vaddr + copied);
         uint64_t page_offset = (dst_vaddr + copied) - page_vaddr;
 
+        // Calculate how much to copy in this iteration (up to the end of the page)
         uint64_t chunk = PAGE_SIZE - page_offset;
         if (chunk > size - copied)
             chunk = size - copied;
@@ -79,6 +87,7 @@ static int elf_copy_to_mapped(address_space_t *addr_space, uint64_t dst_vaddr, c
             return -1;
         }
 
+        // Copy the data from the source to the mapped physical memory
         uint8_t *kptr = (uint8_t *)phys_to_virt(phys) + page_offset;
         memcpy(kptr, src + copied, chunk);
 
@@ -213,6 +222,7 @@ int elf_load(const void *data, size_t size, address_space_t *addr_space, elf_inf
             }
         }
 
+        // zero out the remaining memory (BSS section)
         if (phdr[i].p_memsz > phdr[i].p_filesz)
         {
             uint64_t bss_start = phdr[i].p_vaddr + phdr[i].p_filesz;
@@ -251,6 +261,7 @@ int elf_load_from_file(const char *path, address_space_t *addr_space, elf_info_t
     debug_kprintf("ELF: Loading executable from '%s'\n", path);
 
     file_t *file;
+    // open the file using the VFS
     if (vfs_open(path, VFS_READ, &file) != 0)
     {
         debug_kprintf("ELF: Failed to open file '%s'\n", path);

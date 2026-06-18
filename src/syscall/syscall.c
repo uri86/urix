@@ -26,7 +26,10 @@
 extern void syscall_entry(void);
 
 
-
+/**
+ * Terminates the current process with the given exit code. 
+ * Cleans up resources and file descriptors before exiting.
+ */
 static long sys_exit(int status)
 {
     debug_kprintf("syscall: exit(%d) from PID %u\n", status, process_get_current()->pid);
@@ -41,6 +44,9 @@ static long sys_exit(int status)
     return 0; // should never get here...
 }
 
+/**
+ * Reads up to "count" bytes from the file descriptor "fd" into the buffer "buf".
+ */
 static long sys_read(int fd, void *buf, size_t count)
 {
     process_t *current = process_get_current();
@@ -92,6 +98,10 @@ static long sys_read(int fd, void *buf, size_t count)
     }
 }
 
+/**
+ * Writes "count" bytes from the buffer "buf" to the file descriptor "fd".
+ * Returns the number of bytes written, or a negative error code on failure.
+ */
 static long sys_write(int fd, const void *buf, size_t count)
 {
     process_t *current = process_get_current();
@@ -135,6 +145,10 @@ static long sys_write(int fd, const void *buf, size_t count)
     }
 }
 
+/**
+ * Opens a file or device for reading or writing.
+ * Returns a file descriptor on success, or a negative error code on failure.
+ */
 static long sys_open(const char *path, int flags)
 {
     process_t *current = process_get_current();
@@ -154,6 +168,7 @@ static long sys_open(const char *path, int flags)
     uint32_t vfs_flags = 0;
     int acc_mode = flags & 3;
 
+    // Map the flags to VFS flags
     if (acc_mode == O_RDONLY)
         vfs_flags |= VFS_READ;
     else if (acc_mode == O_WRONLY)
@@ -168,6 +183,7 @@ static long sys_open(const char *path, int flags)
     if (flags & O_APPEND)
         vfs_flags |= VFS_APPEND;
 
+    // open the file
     file_t *file = NULL;
     int ret = vfs_open(abs_path, vfs_flags, &file);
     if (ret != 0 || !file)
@@ -181,6 +197,11 @@ static long sys_open(const char *path, int flags)
 
     return fd;
 }
+
+/**
+ * Closes the file descriptor "fd".
+ * Returns 0 on success, or a negative error code on failure.
+ */
 static long sys_close(int fd)
 {
     process_t *current = process_get_current();
@@ -199,34 +220,53 @@ static long sys_close(int fd)
     return 0;
 }
 
+/**
+ * Returns the process ID of the current process.
+ * Returns a negative error code on failure.
+ */
 static long sys_getpid(void)
 {
     process_t *current = process_get_current();
     return current ? current->pid : (uint32_t)-1;
 }
 
+/**
+ * Yields the current process, allowing other processes to run.
+ */
 static long sys_yield(void)
 {
     process_yield();
     return 0;
 }
 
+/**
+ * Reads a character from the keyboard, blocking until one is available.
+ */
 static long sys_getchar(void)
 {
     return keyboard_getchar_blocking();
 }
 
+/**
+ * Writes a character to the console.
+ */
 static long sys_putchar(int c)
 {
     console_putchar((char)c);
     return c;
 }
 
+/**
+ * Reads a string from the keyboard, blocking until one is available.
+ */
 static long sys_gets(char *buf, size_t size)
 {
     return keyboard_gets(buf, size);
 }
 
+/**
+ * Writes a string to the console.
+ */
 static long sys_puts(const char *str)
 {
     size_t len = strlen(str);
@@ -238,11 +278,19 @@ static long sys_puts(const char *str)
     return len;
 }
 
+/**
+ * Creates a new process by forking the current process.
+ * Returns the PID of the child process.
+ */
 static long sys_fork(void)
 {
     return process_fork();
 }
 
+/**
+ * Executes a new program in the current process.
+ * Returns a negative error code on failure.
+ */
 static long sys_exec(const char *path, char *const argv[])
 {
     extern uint64_t syscall_frame_rsp;
@@ -261,6 +309,7 @@ static long sys_exec(const char *path, char *const argv[])
         return -EINVAL;
     debug_kprintf("exec: '%s'\n", kpath);
 
+    // extract the basename from the path to use as the process name
     const char *basename = kpath;
     for (int i = 0; kpath[i] != '\0'; i++)
     {
@@ -374,18 +423,17 @@ static long sys_exec(const char *path, char *const argv[])
     /* rewrite iretq frame */
     uint64_t *frame = (uint64_t *)trap_frame_ptr;
     frame[0] = elf_info.entry_point; /* RIP */
-    frame[1] = 0x1B;                 /* CS  */
-    frame[2] = 0x202;                /* RFLAGS */
-    frame[3] = sp;                   /* RSP, points at argc */
-    frame[4] = 0x23;                 /* SS   */
+    frame[1] = 0x1B; /* CS  */
+    frame[2] = 0x202; /* RFLAGS */
+    frame[3] = sp; /* RSP, points at argc */
+    frame[4] = 0x23; /* SS */
 
     /* zero all the general purpose registers */
     uint64_t *regs = (uint64_t *)(trap_frame_ptr - 120);
     for (int i = 0; i < 15; i++)
         regs[i] = 0;
 
-    debug_kprintf("exec: ready — entry=0x%lx sp=0x%lx argc=%d\n",
-                  elf_info.entry_point, sp, argc);
+    debug_kprintf("exec: ready — entry=0x%lx sp=0x%lx argc=%d\n", elf_info.entry_point, sp, argc);
     kfree(kargs);
     return 0;
 }
@@ -397,13 +445,13 @@ static long sys_wait(int *status)
 
 static long sys_kill(uint32_t pid, int sig)
 {
-    (void)sig;
+    (void)sig; // ignore the signal
     return process_kill(pid);
 }
 
 static long sys_mkdir(const char *path, uint32_t mode)
 {
-    (void)mode;
+    (void)mode; // ignore the creation mode.
     char abs_path[512];
     if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
@@ -487,6 +535,7 @@ static long sys_readdir(int fd, dirent_t *user_entry)
     if (!current || !current->fd_table)
         return -EBADF;
 
+    // get the directory entry from the file descriptor table
     fd_entry_t *entry = fd_table_get(current->fd_table, fd);
     if (!entry || entry->type != FD_TYPE_FILE || !entry->vfs_file)
         return -EBADF;
@@ -505,6 +554,9 @@ static long sys_readdir(int fd, dirent_t *user_entry)
     return 0;
 }
 
+/**
+ * Returns the current working directory of the process.
+ */
 static long sys_getcwd(char *buf, size_t size)
 {
     if (!buf || size == 0)
@@ -519,13 +571,15 @@ static long sys_getcwd(char *buf, size_t size)
         return -EINVAL; /* buffer too small */
     strncpy(buf, current->cwd, size);
     buf[0] = '/';
-    return (long)(len + 1);
+    return (long)(len + 1); // return the length of the path
 }
 
 static long sys_chdir(const char *path)
 {
     if (!path)
         return -EINVAL;
+    
+    // get current process
     process_t *current = process_get_current();
     if (!current)
         return -ESRCH;
@@ -534,6 +588,7 @@ static long sys_chdir(const char *path)
     if (vfs_resolve_path(path, abs_path) != 0)
         return -EINVAL;
 
+    // check if the path exists and is a directory
     file_t *f = NULL;
     int ret = vfs_open(abs_path, VFS_READ, &f);
     if (ret != 0 || !f)
@@ -546,21 +601,25 @@ static long sys_chdir(const char *path)
     }
     vfs_close(f);
 
+    // update the process's current working directory
     strncpy(current->cwd, abs_path, sizeof(current->cwd) - 1);
     current->cwd[sizeof(current->cwd) - 1] = '\0';
     return 0;
 }
 
 static long sys_isatty(int fd)
-{
+{   
+    // get current process
     process_t *current = process_get_current();
     if (!current || !current->fd_table)
         return 0;
 
+    // check if the entry provided exists
     fd_entry_t *entry = fd_table_get(current->fd_table, fd);
     if (!entry)
         return 0;
 
+    // check if it's a console or a file on devfs
     if (entry->type == FD_TYPE_CONSOLE)
         return 1;
 
@@ -639,7 +698,7 @@ static long sys_pipe(int *pipefd)
 static long sys_uptime(void)
 {
     extern uint64_t uptime_ticks;
-    return uptime_ticks / 18;
+    return uptime_ticks / 18; // convert ticks to seconds, 18.2 ticks per second
 }
 
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);

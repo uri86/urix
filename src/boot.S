@@ -72,7 +72,7 @@ check_cpuid:
     pushfl
     popl %eax
     movl %eax, %ecx
-    xorl $0x200000, %eax
+    xorl $0x200000, %eax # 21st bit
     pushl %eax
     popfl
     pushfl

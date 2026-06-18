@@ -9,7 +9,7 @@
 process_context_switch:
     # Check if old_context is NULL
     testq %rdi, %rdi
-    jz restore_new_context    # If NULL, skip saving
+    jz restore_new_context # If NULL, skip saving
 
     # Save general-purpose registers
     movq %r15, 0x00(%rdi)
@@ -64,7 +64,7 @@ restore_kernel_mode:
     jne normal_kernel_restore
 
 first_process_jump:
-    # First kernel process — restore and jump directly
+    # First kernel process, restore and jump directly
     movq 0x90(%rsi), %rsp
 
     movq 0x00(%rsi), %r15
@@ -133,12 +133,12 @@ normal_kernel_restore:
 
 restore_user_mode:
     # Build iretq frame on the kernel stack.
-    # iretq tomically loads RSP from the frame when it drops to ring 3.
-    pushq 0x98(%rsi)           # SS
-    pushq 0x90(%rsi)           # RSP (user stack pointer)
-    pushq 0x88(%rsi)           # RFLAGS
-    pushq 0x80(%rsi)           # CS
-    pushq 0x78(%rsi)           # RIP
+    # iretq automatically loads RSP from the frame when it drops to ring 3.
+    pushq 0x98(%rsi) # SS
+    pushq 0x90(%rsi) # RSP (user stack pointer)
+    pushq 0x88(%rsi) # RFLAGS
+    pushq 0x80(%rsi) # CS
+    pushq 0x78(%rsi) # RIP
 
     # Restore general-purpose registers
     movq 0x00(%rsi), %r15

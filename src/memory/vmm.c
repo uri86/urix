@@ -213,6 +213,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
 
     uint64_t *src_pml4 = src->pml4_virt;
 
+    // loop through the user-space portion of the PML4 table
     for (int i4 = 0; i4 < 256; i4++)
     {
         if (!(src_pml4[i4] & VMM_PRESENT))
@@ -220,6 +221,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
 
         uint64_t *src_pdpt = (uint64_t *)phys_to_virt(pte_to_phys(src_pml4[i4]));
 
+        // loop through PDPT entries
         for (int i3 = 0; i3 < 512; i3++)
         {
             if (!(src_pdpt[i3] & VMM_PRESENT))
@@ -227,6 +229,7 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
 
             uint64_t *src_pd = (uint64_t *)phys_to_virt(pte_to_phys(src_pdpt[i3]));
 
+            // loop through PD entries
             for (int i2 = 0; i2 < 512; i2++)
             {
                 if (!(src_pd[i2] & VMM_PRESENT))
@@ -234,14 +237,16 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
 
                 uint64_t *src_pt = (uint64_t *)phys_to_virt(pte_to_phys(src_pd[i2]));
 
+                // loop through PT entries and clone each page
                 for (int i1 = 0; i1 < 512; i1++)
                 {
+                    // if the page is not present, skip it
                     if (!(src_pt[i1] & VMM_PRESENT))
                         continue;
 
                     uint64_t src_phys = pte_to_phys(src_pt[i1]);
                     uint64_t flags = src_pt[i1] & 0xFFF;
-
+                    // create the virtual address for this page
                     uint64_t virt = ((uint64_t)i4 << 39) |
                                     ((uint64_t)i3 << 30) |
                                     ((uint64_t)i2 << 21) |
@@ -251,14 +256,15 @@ int vmm_clone_user_space(address_space_t *src, address_space_t *dst)
                     if (!dst_phys)
                     {
                         debug_kprintf("vmm_clone_user_space: OOM at virt 0x%llx\n", virt);
-                        __asm__ volatile("sti");
+                        __asm__ volatile("sti"); // enable interrupts before returning
                         return -1;
                     }
 
                     uint64_t dst_virt = (uint64_t)phys_to_virt(dst_phys);
                     vmm_map_kernel_page(dst_virt, dst_phys);
-                    memcpy((void *)dst_virt, phys_to_virt(src_phys), PAGE_SIZE);
+                    memcpy((void *)dst_virt, phys_to_virt(src_phys), PAGE_SIZE); // copy the page data
 
+                    // clone the page into the new address space with the same flags
                     if (vmm_map_page(dst, virt, dst_phys, flags) != 0)
                     {
                         debug_kprintf("vmm_clone_user_space: map failed at virt 0x%llx\n", virt);

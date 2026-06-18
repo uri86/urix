@@ -201,6 +201,7 @@ static void page_fault_exception_handler(struct cpu_interrupt_frame *frame, uint
 {
     process_t *current = process_get_current();
     uint64_t cr2;
+    // Read the faulting address from CR2
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
 
    kprintf("[EXCEPTION] Page fault at address 0x%llx, RIP 0x%llx, code 0x%llx\n", cr2, frame->rip, error_code);

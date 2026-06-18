@@ -59,7 +59,7 @@ void pic_mask_irq(uint8_t irq)
     else
     {
         port = PIC2_DATA;
-        irq -= 8;
+        irq -= 8; // adjust for slave PIC
     }
 
     value = inb(port) | (1 << irq);
@@ -70,7 +70,7 @@ void pic_unmask_irq(uint8_t irq)
 {
     uint16_t port;
     uint8_t value;
-
+    // master PIC handles IRQs 0-7, slave PIC handles IRQs 8-15
     if (irq < 8)
     {
         port = PIC1_DATA;
@@ -81,6 +81,7 @@ void pic_unmask_irq(uint8_t irq)
         irq -= 8;
     }
 
+    // read current mask, clear the bit for this IRQ, and write it back
     value = inb(port) & ~(1 << irq);
     outb(port, value);
 }

@@ -21,6 +21,7 @@
 #define USER_CS 0x1B
 #define USER_DS 0x23
 
+// redefine if needed
 #ifndef USER_STACK_TOP
 #define USER_STACK_TOP 0x0000800000000000ULL
 #endif
@@ -39,6 +40,9 @@ static uint32_t next_pid = 0;
 static uint32_t total_processes = 0;
 static uint64_t context_switches = 0;
 
+/**
+ * adds the process to the appropriate ready queue based on its effective priority.
+ */
 static void enqueue(process_t *proc)
 {
     if (!proc)
@@ -59,6 +63,9 @@ static void enqueue(process_t *proc)
     q->count++;
 }
 
+/**
+ * removes and returns the highest priority process from the ready queues.
+ */
 static process_t *dequeue_highest_priority(void)
 {
     for (int p = PRIORITY_REALTIME; p >= PRIORITY_IDLE; p--)
@@ -78,21 +85,29 @@ static process_t *dequeue_highest_priority(void)
     return NULL;
 }
 
+/**
+ * removes the process from its current ready queue.
+ */
 static void remove_from_ready_queue(process_t *p)
 {
+    // get the ready queue for the process's effective priority
     ready_queue_t *q = &ready_queues[p->effective_priority];
     process_t *prev = NULL;
     process_t *curr = q->head;
 
-    while (curr)
+    // iterate through the queue to find the process and remove it
+    while (curr) 
     {
         if (curr == p)
         {
+            // move the pointer to skip the current process
             if (prev)
                 prev->next_in_queue = curr->next_in_queue;
+            // move the queue head
             else
                 q->head = curr->next_in_queue;
 
+            // backtrack the tail
             if (q->tail == curr)
                 q->tail = prev;
 
@@ -105,6 +120,9 @@ static void remove_from_ready_queue(process_t *p)
     }
 }
 
+/**
+ * removes the process from the all_processes list.
+ */
 static void remove_from_all_processes(process_t *p)
 {
     if (all_processes == p)
@@ -147,6 +165,7 @@ static void cleanup_process_resources(process_t *p)
 
 static process_t *alloc_process(const char *name, process_priority_t priority, process_privilege_t privilege)
 {
+    // allocate and zero the PCB
     process_t *proc = (process_t *)kmalloc(sizeof(process_t));
     if (!proc)
         return NULL;
@@ -192,7 +211,8 @@ static process_t *alloc_process(const char *name, process_priority_t priority, p
     proc->kernel_stack_virt = KERNEL_VIRT_BASE + proc->kernel_stack_phys;
     vmm_map_page(proc->addr_space, proc->kernel_stack_virt,
                  proc->kernel_stack_phys, VMM_KERNEL_FLAGS);
-
+    
+    // create file descriptor table
     proc->fd_table = fd_table_create();
     if (!proc->fd_table)
     {
@@ -219,6 +239,7 @@ void process_init(void)
 {
     kprintf("\n=== Process Manager Init ===\n");
 
+    // initialize ready queues and process lists
     memset(ready_queues, 0, sizeof(ready_queues));
     all_processes = NULL;
     current_process = NULL;
@@ -258,6 +279,7 @@ int process_create(uint64_t entry_point, const char *name, process_priority_t pr
 
     if (privilege == PROCESS_USER)
     {
+        // setup user mode context
         proc->context.cs = USER_CS;
         proc->context.ss = USER_DS;
         proc->user_stack = USER_STACK_TOP;
@@ -272,6 +294,7 @@ int process_create(uint64_t entry_point, const char *name, process_priority_t pr
     }
     else
     {
+        // setup kernel mode context
         proc->context.cs = KERNEL_CS;
         proc->context.ss = KERNEL_DS;
         uint64_t rsp = proc->kernel_stack_virt + PAGE_SIZE;
@@ -379,8 +402,9 @@ int process_load_elf(const char *name, const void *elf_data,
         kprintf("[WARN] process_load_elf: could not map stack top for argv\n");
     }
 
+    // setup the context for the process
     proc->context.rip = elf_info.entry_point;
-    proc->context.rsp = USER_STACK_TOP - 16; /* points at argc slot */
+    proc->context.rsp = USER_STACK_TOP - 16; /* points at argc slot, -16 for alignment */
     proc->context.rbp = USER_STACK_TOP - 16;
     proc->context.cs = USER_CS;
     proc->context.ss = USER_DS;
@@ -400,13 +424,14 @@ int process_load_elf(const char *name, const void *elf_data,
 
 int process_fork(void)
 {
+    // get the current process to fork from
     process_t *parent = process_get_current();
     if (!parent)
     {
         debug_kprintf("no parent process to fork!\n");
         return -1;
     }
-
+    // get the registers from the syscall frame
     extern uint64_t syscall_frame_rsp;
     uint64_t trap_frame_ptr = syscall_frame_rsp;
     uint64_t *regs = (uint64_t *)(trap_frame_ptr - 120);
@@ -420,6 +445,8 @@ int process_fork(void)
         debug_kprintf("failed to allocate child process table\n");
         return -1;
     }
+
+    // update the statistics and identity of the child process
     memcpy(child, parent, sizeof(process_t));
     strncpy(child->cwd, parent->cwd, sizeof(child->cwd));
     child->pid = next_pid++;
@@ -467,6 +494,7 @@ int process_fork(void)
     child->kernel_stack_virt = (uint64_t)phys_to_virt(child->kernel_stack_phys);
     vmm_map_page(vmm_get_kernel_space(), child->kernel_stack_virt, child->kernel_stack_phys, VMM_KERNEL_FLAGS);
 
+    // load registers from syscall frame
     extern uint64_t syscall_saved_user_rip;
     extern uint64_t syscall_saved_user_rsp;
     extern uint64_t syscall_saved_user_rflags;
@@ -474,8 +502,8 @@ int process_fork(void)
     child->context.rsp = syscall_saved_user_rsp;
     child->context.rbp = parent->context.rbp;
     child->context.rflags = syscall_saved_user_rflags | 0x200;
-    child->context.cs = 0x1B;
-    child->context.ss = 0x23;
+    child->context.cs = USER_CS;
+    child->context.ss = USER_DS;
     child->context.rax = 0; // child gets 0 from fork
     child->context.rbx = regs[1];
     child->context.rcx = regs[2];
@@ -515,7 +543,7 @@ int process_fork(void)
             {
             case FD_TYPE_FILE:
                 if (child_fd->vfs_file)
-                    vfs_retain_file(child_fd->vfs_file);
+                    vfs_retain_file(child_fd->vfs_file); // update file ref count for the new process
                 break;
 
             case FD_TYPE_PIPE:
@@ -690,7 +718,7 @@ void process_schedule(void)
             {
                 PANIC("No runnable process after termination!");
             }
-
+            // Update new process state
             new->state = PROCESS_STATE_RUNNING;
             new->time_slice_remaining = TIME_SLICE;
             new->wait_time = 0;
@@ -703,7 +731,7 @@ void process_schedule(void)
             gdt_set_kernel_stack(new->kernel_stack_virt + PAGE_SIZE);
 
             cleanup_process_resources(old);
-
+            // switch to the new process without saving old context since it's dead
             process_context_switch(NULL, &new->context);
 
             PANIC("Returned from context switch after cleanup");
@@ -723,6 +751,7 @@ void process_schedule(void)
         {
             debug_kprintf("WARNING: All processes blocked or terminated!\n");
 
+            // check if any processes is available to run
             process_t *p = all_processes;
             while (p)
             {
@@ -842,6 +871,7 @@ void process_timer_tick(void)
     current_process->total_runtime++;
 
     process_t *p = all_processes;
+    // run through all processes to update wait times and check for priority boosts
     while (p)
     {
         if (p->state == PROCESS_STATE_READY && p != current_process)

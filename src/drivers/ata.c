@@ -124,6 +124,7 @@ static int ata_write_block(blockdev_t *dev, uint64_t sector, const void *buf, si
     if (sector + count > 0x10000000)
         return -1;
 
+    // Write each sector
     for (size_t i = 0; i < count; i++)
     {
         uint32_t lba = sector + i;
@@ -215,6 +216,7 @@ static void ata_probe(uint16_t base, uint16_t ctrl, int slave, const char *name)
     ata_device_t *priv = kmalloc(sizeof(ata_device_t));
     memset(dev, 0, sizeof(blockdev_t));
 
+    // Copy the device name and set up the block device structure
     strncpy(dev->name, name, BLOCKDEV_MAX_NAME);
     dev->type = BLOCKDEV_TYPE_DISK;
     dev->sector_size = 512;

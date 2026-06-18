@@ -85,7 +85,7 @@ fd_entry_t *fd_table_get(fd_table_t *table, int fd)
     if (table->fds[fd].type == FD_TYPE_NONE)
         return NULL;
 
-    return &table->fds[fd];
+    return &table->fds[fd]; // returns a pointer to the fd entry
 }
 
 void fd_table_free(fd_table_t *table, int fd)
@@ -95,6 +95,7 @@ void fd_table_free(fd_table_t *table, int fd)
 
     fd_entry_t *entry = &table->fds[fd];
 
+    // release the file descriptor resources based on the type
     switch (entry->type)
     {
     case FD_TYPE_FILE:

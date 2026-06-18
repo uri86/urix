@@ -229,6 +229,7 @@ void start_init_process(void)
 
 void kernel_main(uint64_t mb_info_addr)
 {
+    /* Get info from the multiboot header*/
     uint8_t test_mode = 0, kernel_mode = 0;
     uint8_t *cmd = NULL;
     multiboot_size_tag *tag = (multiboot_size_tag *)(uintptr_t)mb_info_addr;
@@ -337,7 +338,7 @@ void kernel_main(uint64_t mb_info_addr)
 
     if (test_mode)
     {
-        /* Test mode - run test suite */
+        /* Run test suite */
         if (process_create((uint64_t)test_suite_process, "test-suite", PRIORITY_HIGH, PROCESS_KERNEL) < 0)
             PANIC("Failed to create test-suite process");
     }
